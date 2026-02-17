@@ -7,6 +7,7 @@ import {
 } from "react-router";
 import "@shopify/polaris/build/esm/styles.css";
 
+
 export default function Root() {
   return (
     <html>

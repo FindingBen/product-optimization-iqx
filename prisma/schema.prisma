@@ -51,7 +51,7 @@ model BusinessRuleset {
   shop                         String   @unique
 
   storeDescription             String
-  
+  productScan                  Boolean?  @default(false)
   productNameRule              String?
   productDescriptionRule       String?
   productImageRule             String?
@@ -87,15 +87,56 @@ model Analytics{
   seoScore                     Float    @default(0.0)
 }
 
-model ProductContext{
-  id    String   @id @default(cuid())
-  shop                         String   @unique
+model Product {
+  id                String   @id @default(cuid())
+  shop              String
+  shopifyProductId  String
 
+  title             String
+  description       String?
+
+  analyses          SeoAnalysis[]
+  contexts          ProductContext[]
+
+  @@unique([shop, shopifyProductId])
 }
 
+
+model ProductMediaContext {
+  id          String   @id @default(cuid())
+  productContextId String
+  productContext ProductContext @relation(fields: [productContextId], references: [id], onDelete: Cascade)
+
+  url         String
+  altText     String?
+
+  createdAt   DateTime @default(now())
+}
+
+model ProductContext {
+  id          String   @id @default(cuid())
+
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  title       String?
+  description String?
+  metaDescription String?
+
+  media       ProductMediaContext[] 
+
+  createdAt   DateTime @default(now())
+}
+
+
+
 model SeoAnalysis {
-  id        String  @id @default(cuid())
-  productId String
-  score     Int
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  score       Int
+  completeness String
+
+  createdAt   DateTime @default(now())
 }
