@@ -50,7 +50,6 @@ model BusinessRuleset {
 
   shop                         String   @unique
 
-  storeDescription             String
   productScan                  Boolean?  @default(false)
   productNameRule              String?
   productDescriptionRule       String?

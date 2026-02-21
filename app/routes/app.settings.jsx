@@ -1,22 +1,48 @@
-import { Outlet, useLoaderData, useRouteError } from "react-router";
-import { boundary } from "@shopify/shopify-app-react-router/server";
-import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-router/react";
-import { AppProvider as PolarisProvider } from "@shopify/polaris";
-import enTranslations from "@shopify/polaris/locales/en.json";
+import { useFetcher, useLoaderData, useRevalidator } from "react-router";
+import { useEffect, useState } from "react";
+import BusinessRulesetComponent from "../components/businessRulesetComponent";
 import "@shopify/polaris/build/esm/styles.css";
 import { authenticate } from "../shopify.server";
 
 
 export const loader = async ({ request }) => {
-  await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
+  const { getBusinessRuleset } = await import(
+    "../models/BusinessRuleset.server"
+  );
+  const businessRuleset = await getBusinessRuleset(session.shop);
 
-  // eslint-disable-next-line no-undef
-  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  return { businessRuleset: businessRuleset,};
 };
+
+export const action = async ({request}) =>{
+   const { deleteBusinessRuleset } = await import(
+      "../models/BusinessRuleset.server"
+    );
+  const formdata = await request.formData();
+  const intent = formdata.get("intent");
+  if(intent === "deleteRuleset"){
+    const { session } = await authenticate.admin(request);
+    await deleteBusinessRuleset(session.shop);
+    return { success: true };
+  }
+}
 
 export default function Settings(){
 
+  const fetcher = useFetcher();
+  fetcher.state === "submitting" &&
+  fetcher.formData?.get("intent") === "deleteRuleset";
+  const {
+  businessRuleset
+} = useLoaderData();
+const revalidator = useRevalidator();
 
+useEffect(() => {
+  if (fetcher.state === "idle" && fetcher.data?.success) {
+    revalidator.revalidate();
+  }
+}, [fetcher.state, fetcher.data]);
     return(
         <form
   data-save-bar
@@ -95,81 +121,25 @@ export default function Settings(){
         {/* === */}
         {/* Preferences */}
         {/* === */}
-        <s-section heading="Preferences">
-          <s-box border="base" borderRadius="base">
-            <s-clickable
-              padding="small-100"
-              href="/app/settings/shipping"
-              accessibilityLabel="Configure shipping methods, rates, and fulfillment options"
-            >
-              <s-grid
-                gridTemplateColumns="1fr auto"
-                alignItems="center"
-                gap="base"
-              >
-                <s-box>
-                  <s-heading>Shipping & fulfillment</s-heading>
-                  <s-paragraph color="subdued">
-                    Shipping methods, rates, zones, and fulfillment preferences.
-                  </s-paragraph>
-                </s-box>
-                <s-icon type="chevron-right" />
-              </s-grid>
-            </s-clickable>
-            <s-box paddingInline="small-100">
-              <s-divider />
-            </s-box>
-
-            <s-clickable
-              padding="small-100"
-              href="/app/settings/products_catalog"
-              accessibilityLabel="Configure product defaults, customer experience, and catalog settings"
-            >
-              <s-grid
-                gridTemplateColumns="1fr auto"
-                alignItems="center"
-                gap="base"
-              >
-                <s-box>
-                  <s-heading>Products & catalog</s-heading>
-                  <s-paragraph color="subdued">
-                    Product defaults, customer experience, and catalog display
-                    options.
-                  </s-paragraph>
-                </s-box>
-                <s-icon type="chevron-right" />
-              </s-grid>
-            </s-clickable>
-            <s-box paddingInline="small-100">
-              <s-divider />
-            </s-box>
-
-            <s-clickable
-              padding="small-100"
-              href="/app/settings/customer_support"
-              accessibilityLabel="Manage customer support settings and help resources"
-            >
-              <s-grid
-                gridTemplateColumns="1fr auto"
-                alignItems="center"
-                gap="base"
-              >
-                <s-box>
-                  <s-heading>Customer support</s-heading>
-                  <s-paragraph color="subdued">
-                    Support settings, help resources, and customer service
-                    tools.
-                  </s-paragraph>
-                </s-box>
-                <s-icon type="chevron-right" />
-              </s-grid>
-            </s-clickable>
-          </s-box>
-        </s-section>
-
-        {/* === */}
-        {/* Tools */}
-        {/* === */}
+        <s-section heading="Ruleset">
+  {businessRuleset ? (
+    <>
+      <BusinessRulesetComponent businessData={businessRuleset} />
+      <fetcher.Form method="post" style={{ marginTop: '1rem' }}>
+        <input type="hidden" name="intent" value="deleteRuleset" />
+        <s-button tone="critical" variant="secondary" type="submit">
+          Delete ruleset
+        </s-button>
+      </fetcher.Form>
+    </>
+  ) : (
+    <s-box padding="base" background="subdued" borderRadius="medium">
+      <s-text variant="bodyMd" color="subdued">
+        No business ruleset configured yet.
+      </s-text>
+    </s-box>
+  )}
+</s-section>
         <s-section heading="Tools">
           <s-stack
             gap="none"

@@ -3,7 +3,8 @@ import { useFetcher, useNavigate, useLoaderData, redirect,useRevalidator } from 
 import { Modal, TitleBar } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
-import {deleteBusinessRuleset,getBusinessRuleset} from "../models/BusinessRuleset.server";
+import BusinessRulesetComponent from "../components/businessRulesetComponent";
+import {deleteBusinessRuleset,getBusinessRuleset,createBusinessRuleset} from "../models/BusinessRuleset.server";
 import {scanProducts,deleteProducts} from "../models/Products.server";
 import prisma from "../db.server";
 
@@ -88,6 +89,11 @@ export const action = async ({ request }) => {
     console.log('scanning products...')
     return await scanProducts({session, admin});
   }
+   if (intent === "rulesetConfigure"){
+    const shop = session.shop
+    console.log('scanning products...')
+    return await createBusinessRuleset({shop, admin});
+  }
   else if (intent === "deleteRuleset") {
     await deleteBusinessRuleset(session.shop);
     return redirect("/app"); // re-load dashboard
@@ -106,6 +112,7 @@ export default function Index() {
   const fetcher = useFetcher();
   // const shopify = useAppBridge();
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const [rulesModalOpen, setRulesModalOpen] = useState(false);
   const isDeleting =
   fetcher.state === "submitting" &&
   fetcher.formData?.get("intent") === "deleteProducts";
@@ -127,7 +134,6 @@ useEffect(() => {
   }
 }, [fetcher.state, fetcher.data]);
 
-console.log('modal state',isScanModalOpen)
 
 useEffect(() => {
   if (fetcher.state === "idle" && fetcher.data?.totalProducts) {
@@ -155,19 +161,56 @@ useEffect(() => {
           <s-stack gap="base">
             <s-heading>Complete your setup</s-heading>
             <s-paragraph>
-              To use productIQX, we need to understand your store rules.
-              This only takes 2 minutes.
+              To use productIQX, we need to understand your store.
+              This only takes a second.
             </s-paragraph>
 
             <s-button
               variant="primary"
-              onClick={() => navigate("/app/business_wizzard")}
+              onClick={() => setRulesModalOpen(true)}
             >
               Configure business rules
             </s-button>
           </s-stack>
         </s-box>
       </s-section>
+      {rulesModalOpen && (
+        <Modal
+          open={rulesModalOpen}
+          onClose={() => setRulesModalOpen(false)}
+          title="Business rules"
+        >
+          <s-stack gap="base" padding="base">
+            <s-paragraph>
+              This will configure your business rules based on the latest analysis. It may take a minute to complete.
+            </s-paragraph>
+
+            <s-divider />
+
+            <s-stack direction="inline" justifyContent="end" gap="small">
+              <s-button
+                variant="secondary"
+                onClick={() => setRulesModalOpen(false)}
+              >
+                Cancel
+              </s-button>
+
+              <s-button
+                variant="primary"
+                loading={fetcher.state === "submitting"}
+                onClick={() =>
+                  fetcher.submit(
+                    { intent: "rulesetConfigure" },
+                    { method: "post" }
+                  )
+                }
+              >
+                Continue
+              </s-button>
+            </s-stack>
+          </s-stack>
+        </Modal>
+      )}
     </s-page>
   );
 }
@@ -216,28 +259,7 @@ return (
       <s-button slot="primary-action">Create puzzle</s-button>
       <s-button slot="secondary-actions">Browse templates</s-button>
       <s-button slot="secondary-actions">Import image</s-button>
-    {hasBusinessRuleset && (
-  <s-section>
-    <s-box
-      padding="base"
-      border="base"
-      borderRadius="base"
-      background="critical-subdued"
-    >
-      <s-stack direction="inline" alignItems="center" justifyContent="space-between">
-        <s-text tone="critical">Business rules configured</s-text>
-
-        <fetcher.Form method="post">
-          <input type="hidden" name="intent" value="deleteRuleset" />
-          <s-button tone="critical" variant="secondary" type="submit">
-            Delete ruleset
-          </s-button>
-        </fetcher.Form>
-      </s-stack>
-    </s-box>
-  </s-section>
-  
-)}
+    
       <s-section padding="base">
         <s-grid
           gridTemplateColumns="@container (inline-size <= 400px) 1fr, 1fr auto 1fr auto 1fr"
@@ -422,6 +444,41 @@ return (
 </s-table-body>
 
       </s-table>
+      <Modal
+    open={rulesModalOpen}
+    onClose={() => setRulesModalOpen(false)}
+    title="Business rules"
+  >
+        <s-stack gap="base" padding="base">
+          <s-paragraph>
+            This will configure your business rules based on the latest analysis. It may take a minute to complete.
+          </s-paragraph>
+
+          <s-divider />
+
+          <s-stack direction="inline" justifyContent="end" gap="small">
+            <s-button
+              variant="secondary"
+              onClick={() => setRulesModalOpen(false)}
+            >
+              Cancel
+            </s-button>
+
+            <s-button
+              variant="primary"
+              loading={fetcher.state === "submitting"}
+              onClick={() =>
+                fetcher.submit(
+                  { intent: "scanProducts" },
+                  { method: "post" }
+                )
+              }
+            >
+              Yes, scan products
+            </s-button>
+          </s-stack>
+        </s-stack>
+      </Modal>
     </s-section>
       )}
 

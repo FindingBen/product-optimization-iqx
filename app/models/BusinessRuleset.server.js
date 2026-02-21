@@ -1,5 +1,8 @@
 import db from "../db.server";
 import prisma from "../db.server";
+import {GET_SHOPIFY_SHOP_INFO} from "../Queries/queries";
+import {Prompting} from "../Analyzer/ai_analyzer";
+import {OpenAuthInit} from '../auth';
 
 export async function getBusinessRuleset(shop) {
   const ruleset = await prisma.businessRuleset.findUnique({
@@ -7,7 +10,6 @@ export async function getBusinessRuleset(shop) {
     select: {
       id: true,
       shop: true,
-      storeDescription: true,
       productScan: true,
       productNameRule: true,
       productDescriptionRule: true,
@@ -32,14 +34,23 @@ export async function getBusinessRuleset(shop) {
 }
 
 export async function createBusinessRuleset({ shop, ...data }) {
+
+  const shopInfo = await getShopInfo(data.admin);
+  const auth = new OpenAuthInit(data.admin || {});
+  const client = await auth.clientAuth();
+  const initializeProcess = new Prompting({client, data: shopInfo});
+
+  const data_ruleset = await initializeProcess.analyze_business();
+  const prompt_ruleset = data_ruleset['recommended_seo_ruleset'];
+
   return db.businessRuleset.upsert({
     where: { shop },
     update: {
-      ...data,
+      ...prompt_ruleset,
     },
     create: {
       shop,
-      ...data,
+      ...prompt_ruleset,
     },
   });
 }
@@ -55,7 +66,16 @@ export async function updateBusinessRuleset({ shop, ...data}){
 }
 
 export async function deleteBusinessRuleset(shop) {
+  console.log("Deleting ruleset for shop:", shop);
   return prisma.businessRuleset.delete({
     where: { shop },
   });
+}
+
+
+export async function getShopInfo(admin){
+  const response = await admin.graphql(GET_SHOPIFY_SHOP_INFO);
+  const json = await response.json();
+  const shop_data = json.data
+  return shop_data;
 }
