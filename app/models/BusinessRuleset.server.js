@@ -56,33 +56,44 @@ export async function createBusinessRuleset({ shop, ...data }) {
 }
 
 export async function updateBusinessRuleset({ shop, ...raw }) {
-  const sanitizedData = {
-    productScan: raw.productScan === "true" || raw.productScan === true,
+  const data = {};
 
-    productNameRule: raw.productNameRule ?? undefined,
-    productDescriptionRule: raw.productDescriptionRule ?? undefined,
-    productImageRule: raw.productImageRule ?? undefined,
-    productVariantRule: raw.productVariantRule ?? undefined,
-    productTagRule: raw.productTagRule ?? undefined,
-    productAltImageRule: raw.productAltImageRule ?? undefined,
-    keywords: raw.keywords ?? undefined,
+  if ("productNameRule" in raw)
+    data.productNameRule = raw.productNameRule;
 
-    minImages: raw.minImages
-      ? parseInt(raw.minImages)
-      : undefined,
+  if ("productDescriptionRule" in raw)
+    data.productDescriptionRule = raw.productDescriptionRule;
 
-    requiresAltText:
-      raw.requiresAltText === "true" || raw.requiresAltText === true,
-  };
+  if ("productImageRule" in raw)
+    data.productImageRule = raw.productImageRule;
 
-  // Remove undefined fields (Prisma ignores missing ones)
-  Object.keys(sanitizedData).forEach(
-    (key) => sanitizedData[key] === undefined && delete sanitizedData[key]
-  );
+  if ("productVariantRule" in raw)
+    data.productVariantRule = raw.productVariantRule;
+
+  if ("productTagRule" in raw)
+    data.productTagRule = raw.productTagRule;
+
+  if ("productAltImageRule" in raw)
+    data.productAltImageRule = raw.productAltImageRule;
+
+  if ("keywords" in raw)
+    data.keywords = raw.keywords;
+
+  if ("minImages" in raw && raw.minImages !== "")
+    data.minImages = parseInt(raw.minImages);
+
+  if ("requiresAltText" in raw)
+    data.requiresAltText =
+      raw.requiresAltText === "true" || raw.requiresAltText === true;
+
+  // 🔒 Only update productScan if explicitly sent
+  if ("productScan" in raw)
+    data.productScan =
+      raw.productScan === "true" || raw.productScan === true;
 
   return db.businessRuleset.update({
     where: { shop },
-    data: sanitizedData,
+    data,
   });
 }
 
