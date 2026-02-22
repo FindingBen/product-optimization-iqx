@@ -135,7 +135,7 @@ model SeoAnalysis {
   product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   score       Int
-  completeness String
+  completeness Int
 
   createdAt   DateTime @default(now())
 }

@@ -56,9 +56,7 @@ export const loader = async ({ request }) => {
 
   const totalProducts = formattedProducts.length;
 
-  const optimizedProducts = formattedProducts.filter(
-    (p) => p.score >= 80
-  ).length;
+  const optimizedProducts = 0
 
   const avgScore =
     totalProducts > 0

@@ -2,7 +2,7 @@ import prisma from "../db.server";
 import shopify from "../shopify.server";
 import {GET_ALL_PRODUCTS} from "../Queries/queries";
 import { updateBusinessRuleset,getBusinessRuleset } from "./BusinessRuleset.server";
-import ProductAnalyzer from "../Analyzer/ai_analyzer";
+import {ProductAnalyzer} from "../Analyzer/product_analyzer";
 
 /**
  * Scan shop products and generate SEO analyses
@@ -35,123 +35,98 @@ export async function scanProducts({ session, admin }) {
     // Shopify returns products as edges
     const products = json.data.products.edges.map(e => e.node);
     let totalScore = 0;
+    let totalCompletenessScore = 0;
     const rules = await getBusinessRuleset(shop);
     if (!rules) {
       throw new Error("Cannot scan products without business ruleset");
     }
     // 2️⃣ Process each product
+
     for (const p of products) {
-      // --- Upsert Product ---
-      const product = await prisma.product.upsert({
-        where: {
-          shop_shopifyProductId: {
+      await prisma.$transaction(async (tx) => {
+        const product = await tx.product.upsert({
+          where: {
+            shop_shopifyProductId: {
+              shop,
+              shopifyProductId: p.id,
+            },
+          },
+          update: {
+            title: p.title,
+            description: p.descriptionHtml,
+          },
+          create: {
             shop,
             shopifyProductId: p.id,
+            title: p.title,
+            description: p.descriptionHtml,
           },
-        },
-        update: {
-          title: p.title,
-          description: p.descriptionHtml,
-        },
-        create: {
-          shop,
-          shopifyProductId: p.id,
-          title: p.title,
-          description: p.descriptionHtml,
-        },
-      });
+        });
 
-      // --- Create Snapshot (ProductContext) ---
-      const context = await prisma.productContext.create({
-        data: {
-          productId: product.id,
-          title: p.title,
-          description: p.descriptionHtml,
-          metaDescription: extractMetaDescription(p.descriptionHtml),
-        },
-      });
+        const context = await tx.productContext.create({
+          data: {
+            productId: product.id,
+            title: p.title,
+            description: p.descriptionHtml,
+            metaDescription: extractMetaDescription(p.descriptionHtml),
+          },
+        });
 
-      // --- Save Media Snapshot ---
-      const images =
-      p.media?.edges
-        ?.filter(edge => edge.node?.image)
-        ?.map(edge => edge.node.image) || [];
-          if (images.length > 0) {
-            await prisma.productMediaContext.createMany({
-              data: images.map((img) => ({
-                productContextId: context.id,
-                url: img.url,
-                altText: img.altText,
-              })),
-            });
-          }
+        const images =
+          p.media?.edges
+            ?.filter(edge => edge.node?.image)
+            ?.map(edge => edge.node.image) || [];
+        if (images.length > 0) {
+          await tx.productMediaContext.createMany({
+            data: images.map((img) => ({
+              productContextId: context.id,
+              url: img.url,
+              altText: img.altText,
+            })),
+          });
+        }
 
-          // --- Calculate SEO Score ---
-          const analyzer = new ProductAnalyzer(
-            {
-              id: product.id,
-              title: p.title,
-              description: p.descriptionHtml,
-              parentImages: images,
-              variantImages: []
-            },
-            rules
-          );
+        const analyzer = new ProductAnalyzer(
+          {
+            id: product.id,
+            title: p.title,
+            description: p.descriptionHtml,
+            parentImages: images,
+            variantImages: []
+          },
+          rules
+        );
 
         const analysis = analyzer.analyze();
 
-      totalScore += analysis.scores.seo;
-
-      await prisma.seoAnalysis.create({
-        data: {
-          productId: product.id,
-          score: 0,
-          completeness: "error",
-          errors: JSON.stringify([
-            { code: "ANALYSIS_FAILED", message: err.message }
-          ]),
-        },
+        totalScore += analysis.scores.seo;
+        totalCompletenessScore += analysis.scores.completeness;
+        await tx.seoAnalysis.create({
+          data: {
+            product: {
+              connect: { id: product.id },
+            },
+            score: analysis.scores.seo,
+            completeness: Math.min(analysis.scores.completeness, 100),
+          },
+        });
       });
-
-      continue; // 🔥 Do NOT break loop
     }
 
-      totalScore += analysis.scores.seo;
-
-      await prisma.seoAnalysis.create({
-      data: {
-        productId: product.id,
-        score: Math.round(analysis.scores.seo),
-        completeness:
-          analysis.scores.seo >= 70 ? "good" : "poor",
-        issues: JSON.stringify(analysis.issues),
-        metadata: JSON.stringify(analysis.meta),
-      },
-    });
-
     await updateBusinessRuleset({ shop: session.shop, productScan: true });
-
     return {
       totalProducts: products.length,
       averageScore:
         products.length > 0
           ? Math.round(totalScore / products.length)
           : 0,
+      averageCompleteness:
+        products.length > 0
+          ? Math.round(Math.min(totalCompletenessScore / products.length, 100))
+          : 0,
     };
     }
    catch (err) {
-  console.error("Error type:", err?.constructor?.name);
-
-  if (err instanceof Response) {
-    try {
-      const errorText = await err.text(); // read body exactly once
-      console.error("Shopify GraphQL 400 body:", errorText);
-    } catch (parseError) {
-      console.error("Could not read error body:", parseError);
-    }
-
-    throw new Error("Shopify GraphQL request failed");
-  }
 
   console.error("Non-Response error:", err);
   throw err;
@@ -172,32 +147,6 @@ export async function deleteProducts({session, admin}){
 
 }
 
-function calculateSeoScore({ title, description, images }) {
-  let score = 0;
-
-  // Title length check
-  if (title && title.length >= 20 && title.length <= 70) {
-    score += 25;
-  }
-
-  // Description check
-  if (description && description.length >= 120) {
-    score += 30;
-  }
-
-  // Image count
-  if (images.length >= 1) {
-    score += 20;
-  }
-
-  // Alt text present
-  const imagesWithAlt = images.filter((img) => img.altText);
-  if (imagesWithAlt.length === images.length && images.length > 0) {
-    score += 25;
-  }
-
-  return score;
-}
 
 
 function extractMetaDescription(html) {

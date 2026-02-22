@@ -83,9 +83,33 @@ class ProductAnalyzer {
   }
 
   analyzeImages() {
-    const { parentImages = [], variantImages = [] } = this.product;
-    return ProductAnalyzer.analyzeImages(parentImages, variantImages, this.rules);
+  const { parentImages = [], variantImages = [] } = this.product;
+
+  // actual image analysis logic here
+  const totalImages = [...parentImages, ...variantImages];
+
+  let seoDelta = 0;
+  let completenessDelta = 0;
+  const issues = [];
+
+  if (totalImages.length === 0) {
+    issues.push({
+      code: "NO_IMAGES",
+      severity: "warning",
+      message: "Product has no images"
+    });
+  } else {
+    seoDelta += 20;
+    completenessDelta += 20;
   }
+
+  return {
+    seoDelta,
+    completenessDelta,
+    issues,
+    meta: { imageCount: totalImages.length }
+  };
+}
 
   analyze() {
     const finalResult = new AnalysisResult(this.product.id);
@@ -108,10 +132,34 @@ class ProductAnalyzer {
 
     const imageResult = this.analyzeImages();
     finalResult.addScore(
-      imageResult.seo_score,
-      imageResult.completeness
-    );
+  imageResult.seoDelta,
+  imageResult.completenessDelta
+);
 
     return finalResult;
   }
 }
+
+class AnalysisResult {
+  constructor(productId) {
+    this.productId = productId;
+    this.scores = { seo: 0, completeness: 0 };
+    this.issues = [];
+    this.meta = {};
+  }
+
+  addScore(seoDelta = 0, completenessDelta = 0) {
+    this.scores.seo += seoDelta;
+    this.scores.completeness += completenessDelta;
+  }
+
+  addIssue(code, message, severity = "warning") {
+    this.issues.push({ code, message, severity });
+  }
+
+  addMeta(key, value) {
+    this.meta[key] = value;
+  }
+}
+
+export {ProductAnalyzer};

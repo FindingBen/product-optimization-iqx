@@ -55,14 +55,35 @@ export async function createBusinessRuleset({ shop, ...data }) {
   });
 }
 
-export async function updateBusinessRuleset({ shop, ...data}){
+export async function updateBusinessRuleset({ shop, ...raw }) {
+  const sanitizedData = {
+    productScan: raw.productScan === "true" || raw.productScan === true,
+
+    productNameRule: raw.productNameRule ?? undefined,
+    productDescriptionRule: raw.productDescriptionRule ?? undefined,
+    productImageRule: raw.productImageRule ?? undefined,
+    productVariantRule: raw.productVariantRule ?? undefined,
+    productTagRule: raw.productTagRule ?? undefined,
+    productAltImageRule: raw.productAltImageRule ?? undefined,
+    keywords: raw.keywords ?? undefined,
+
+    minImages: raw.minImages
+      ? parseInt(raw.minImages)
+      : undefined,
+
+    requiresAltText:
+      raw.requiresAltText === "true" || raw.requiresAltText === true,
+  };
+
+  // Remove undefined fields (Prisma ignores missing ones)
+  Object.keys(sanitizedData).forEach(
+    (key) => sanitizedData[key] === undefined && delete sanitizedData[key]
+  );
+
   return db.businessRuleset.update({
-    where:{
-      shop    },
-    data:{
-      ...data
-    }
-  })
+    where: { shop },
+    data: sanitizedData,
+  });
 }
 
 export async function deleteBusinessRuleset(shop) {

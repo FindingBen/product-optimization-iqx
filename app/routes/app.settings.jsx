@@ -16,7 +16,7 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({request}) =>{
-   const { deleteBusinessRuleset } = await import(
+   const { deleteBusinessRuleset,updateBusinessRuleset } = await import(
       "../models/BusinessRuleset.server"
     );
   const formdata = await request.formData();
@@ -26,6 +26,24 @@ export const action = async ({request}) =>{
     await deleteBusinessRuleset(session.shop);
     return { success: true };
   }
+  else if (intent === "updateRuleset") {
+  const { session } = await authenticate.admin(request);
+
+  const raw = Object.fromEntries(formdata);
+
+  // Remove routing/meta keys before passing to model
+  delete raw.intent;
+  delete raw.id;
+  delete raw.createdAt;
+  delete raw.updatedAt;
+
+  await updateBusinessRuleset({
+    shop: session.shop,
+    ...raw,
+  });
+
+  return { success: true };
+}
 }
 
 export default function Settings(){
@@ -43,19 +61,27 @@ useEffect(() => {
     revalidator.revalidate();
   }
 }, [fetcher.state, fetcher.data]);
+
+
+const handleUpdateRuleset = (updatedData) => {
+    const formData = new FormData();
+
+    formData.append("intent", "updateRuleset");
+
+    Object.entries(updatedData).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        formData.append(key, value);
+      }
+    });
+
+    fetcher.submit(formData, { method: "post" });
+  };
+
+
     return(
-        <form
-  data-save-bar
-  onSubmit={(event) => {
-    event.preventDefault();
-    const formData = new FormData(event.target);
-    const formEntries = Object.fromEntries(formData);
-    console.log("Form data", formEntries);
-  }}
-  onReset={(event) => {
-    console.log("Handle discarded changes if necessary");
-  }}
->
+        <form method="post" data-save-bar>
+ 
+  <input type="hidden" name="intent" value="updateRuleset" />
       <s-page heading="Settings" inlineSize="small">
         {/* === */}
         {/* Store Information */}
@@ -124,7 +150,7 @@ useEffect(() => {
         <s-section heading="Ruleset">
   {businessRuleset ? (
     <>
-      <BusinessRulesetComponent businessData={businessRuleset} />
+      <BusinessRulesetComponent businessData={businessRuleset} onSave={handleUpdateRuleset}/>
       <fetcher.Form method="post" style={{ marginTop: '1rem' }}>
         <input type="hidden" name="intent" value="deleteRuleset" />
         <s-button tone="critical" variant="secondary" type="submit">
