@@ -16,6 +16,24 @@ const shopify = shopifyApp({
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
+  webhooks: {
+    APP_UNINSTALLED: {
+      deliveryMethod: "http",
+      callbackUrl: "/webhooks/app_uninstalled",
+    },
+    PRODUCTS_CREATE: {
+      deliveryMethod: "http",
+      callbackUrl: "/webhooks/products_create",
+    },
+    PRODUCTS_UPDATE: {
+      deliveryMethod: "http",
+      callbackUrl: "/webhooks/products_update",
+    },
+    PRODUCTS_DELETE: {
+      deliveryMethod: "http",
+      callbackUrl: "/webhooks/products_delete",
+    },
+  },
   future: {
     expiringOfflineAccessTokens: true,
   },

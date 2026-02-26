@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
 import { useFetcher, useNavigate, useLoaderData, redirect,useRevalidator } from "react-router";
 import { Modal, TitleBar } from "@shopify/app-bridge-react";
+import OptimizeProductModal from "../components/modals/optimizationModal"
+import ProductUpdateModal from "../components/modals/productUpdateModal"
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
-import BusinessRulesetComponent from "../components/businessRulesetComponent";
 import {deleteBusinessRuleset,getBusinessRuleset,createBusinessRuleset} from "../models/BusinessRuleset.server";
-import {scanProducts,deleteProducts} from "../models/Products.server";
+import {scanProducts,deleteProducts,handleUpdateProductShopify} from "../models/Products.server";
+import {handleOptimization as handleOptimize,fetchOptimizationJobs} from "../models/Optimization.server"
 import prisma from "../db.server";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
 
   const businessRuleset = await getBusinessRuleset(session.shop);
-
+  const optimizationJobs = await fetchOptimizationJobs({shop:session.shop})
   const products = await prisma.product.findMany({
     where: {
       shop: session.shop,
@@ -22,32 +24,27 @@ export const loader = async ({ request }) => {
         orderBy: { createdAt: "desc" },
         take: 1, // only latest score
       },
-      contexts: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        include: {
-          media: true,
-        },
-      },
+     media:{
+      
+     }
     },
     orderBy: {
       title: "asc",
     },
   });
-
   // Transform into UI-friendly format
   const formattedProducts = products.map((product) => {
     const latestAnalysis = product.analyses[0];
-    const latestContext = product.contexts[0];
+    const images = product.media[0];
     const score = latestAnalysis?.score ?? 0;
 
-    const imageUrl =
-      latestContext?.media?.[0]?.url ?? null;
+    const imageUrl = product.media?.[0]?.url ?? null;
 
     return {
       id: product.id,
       title: product.title,
       score,
+      optimized: product.optimized,
       completeness: latestAnalysis?.completeness ?? "N/A",
       imageUrl,
       createdAt: latestAnalysis?.createdAt ?? product.id,
@@ -72,6 +69,7 @@ export const loader = async ({ request }) => {
     hasBusinessRuleset: !!businessRuleset,
     businessRuleset: businessRuleset,
     products: formattedProducts,
+    optimizationJobs,
     totalProducts,
     optimizedProducts,
     avgScore,
@@ -100,6 +98,22 @@ export const action = async ({ request }) => {
     await deleteProducts({session, admin});
     return {success:true} // re-load dashboard
   }
+  else if (intent === "handleOptimize") {
+  const productId = formData.get("productId");
+
+  const title = await handleOptimize({
+    shop: session.shop,
+    admin,
+    productId,
+  });
+  console.log('optimized title', title)
+  return { success: true };
+}
+else if (intent === "handleUpdateProduct"){
+  const productId = formData.get("productId");
+  await handleUpdateProductShopify(admin, session, productId);
+  return { success: true };
+}
 
 
  
@@ -111,6 +125,9 @@ export default function Index() {
   // const shopify = useAppBridge();
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
   const [rulesModalOpen, setRulesModalOpen] = useState(false);
+const [showModal, setShowModal] = useState(false);
+const [showProductModal, setShowProductModal] = useState(false);
+const [selectedProductId, setSelectedProductId] = useState(null);
   const isDeleting =
   fetcher.state === "submitting" &&
   fetcher.formData?.get("intent") === "deleteProducts";
@@ -119,13 +136,14 @@ export default function Index() {
   businessRuleset,
   products,
   totalProducts,
+  optimizationJobs,
   optimizedProducts,
   avgScore,
 } = useLoaderData();
 
   const navigate = useNavigate();
   const revalidator = useRevalidator();
-  console.log('loader data', businessRuleset)
+  console.log('loader data', products)
 useEffect(() => {
   if (fetcher.state === "idle" && fetcher.data?.success) {
     revalidator.revalidate();
@@ -139,7 +157,26 @@ useEffect(() => {
   }
 }, [fetcher.state, fetcher.data]);
 
-  console.log('does',hasBusinessRuleset)
+  
+console.log('products', products)
+const handleOptimizeSubmit = (productId) => {
+  fetcher.submit(
+    {
+      intent: "handleOptimize",
+      productId,
+    },
+    { method: "post" }
+  );
+};
+
+const handleUpdateProduct = (productId) =>{
+  fetcher.submit(
+    {intent: "handleUpdateProduct",
+    productId},
+    {method:"post"}
+  )
+}
+
   if (!hasBusinessRuleset) {
   return (
     <s-page
@@ -272,7 +309,7 @@ return (
             <s-grid gap="small-300">
               <s-heading>Total Optimizations</s-heading>
               <s-stack direction="inline" gap="small-200">
-                <s-text>{optimizedProducts}</s-text>
+                <s-text>{optimizationJobs}</s-text>
                 <s-badge tone="success" icon="arrow-up">
                   0%
                 </s-badge>
@@ -389,58 +426,80 @@ return (
 
   {products.map((product) => (
     <s-table-row key={product.id}>
-      <s-table-cell>
-        <s-stack direction="inline" gap="small" alignItems="center">
-          <s-clickable
-            border="base"
-            borderRadius="base"
-            overflow="hidden"
-            inlineSize="40px"
-            blockSize="40px"
-          >
-            <s-image
-              objectFit="cover"
-              alt={product.title}
-              src={
-                product.imageUrl ??
-                "https://picsum.photos/80/80"
-              }
-            />
-          </s-clickable>
-
-          <s-text>{product.title}</s-text>
-        </s-stack>
-      </s-table-cell>
-
-      <s-table-cell>
-        {product.score}%
-      </s-table-cell>
-
-      <s-table-cell>
-        {product.completeness}
-      </s-table-cell>
-
-      <s-table-cell>
-        <s-badge
-          tone={
-            product.score >= 80
-              ? "success"
-              : product.score >= 50
-              ? "warning"
-              : "critical"
+  <s-table-cell>
+    <s-stack direction="inline" gap="small" alignItems="center">
+      <s-clickable
+        border="base"
+        borderRadius="base"
+        overflow="hidden"
+        inlineSize="40px"
+        blockSize="40px"
+      >
+        <s-image
+          objectFit="cover"
+          alt={product.title}
+          src={
+            product.imageUrl ??
+            "https://picsum.photos/80/80"
           }
-        >
-          {product.score >= 80
-            ? "Optimized"
-            : product.score >= 50
-            ? "Needs Work"
-            : "Poor"}
-        </s-badge>
-      </s-table-cell>
-    </s-table-row>
+        />
+      </s-clickable>
+
+      <s-text>{product.title}</s-text>
+    </s-stack>
+  </s-table-cell>
+
+  <s-table-cell>
+    {product.score}%
+  </s-table-cell>
+
+  <s-table-cell>
+    {product.completeness}
+  </s-table-cell>
+
+  <s-table-cell>
+    <s-badge
+      tone={
+        product.score >= 80
+          ? "success"
+          : product.score >= 50
+          ? "warning"
+          : "critical"
+      }
+    >
+      {product.score >= 80
+        ? "Optimized"
+        : product.score >= 50
+        ? "Needs Work"
+        : "Poor"}
+    </s-badge>
+  </s-table-cell>
+
+  {/* NEW Optimize Button */}
+  <s-table-cell align="end">
+    {product.optimized ? <s-button
+  variant="primary"
+  // onClick={() => {
+  //   setSelectedProductId(product.id);
+  //   setShowModal(true);
+  // }}
+>
+  View
+</s-button>:<s-button
+  variant="primary"
+  onClick={() => {
+    setSelectedProductId(product.id);
+    setShowModal(true);
+  }}
+>
+  Optimize
+</s-button>}
+  </s-table-cell>
+</s-table-row>
   ))}
 </s-table-body>
-
+<ProductUpdateModal showModal={showProductModal} onClose={() => setShowProductModal(false)} awaitUpdate={handleUpdateProduct} productId={selectedProductId}/>
+      <OptimizeProductModal showModal={showModal} onClose={() => setShowModal(false)} awaitOptimize={handleOptimizeSubmit} productId={selectedProductId}/>
       </s-table>
       <Modal
     open={rulesModalOpen}
