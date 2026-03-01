@@ -64,13 +64,18 @@ export async function scanProducts({ session, admin }) {
 
 
         const images =
-          p.media?.edges
-            ?.filter(edge => edge.node?.image)
-            ?.map(edge => edge.node.image) || [];
+  p.media?.edges
+    ?.filter(edge => edge.node?.id && edge.node?.image)
+    ?.map(edge => ({
+      mediaId: edge.node.id,                // ✅ Correct MediaImage GID
+      url: edge.node.image.url,
+      altText: edge.node.image.altText,
+    })) || [];
         if (images.length > 0) {
           await tx.productMedia.createMany({
             data: images.map((img) => ({
               productId: product.id,
+              shopifyMediaId: img.mediaId,
               url: img.url,
               altText: img.altText,
             })),

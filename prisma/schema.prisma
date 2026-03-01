@@ -115,7 +115,7 @@ model ProductMedia {
   id          String   @id @default(cuid())
   productId String
   product Product @relation(fields: [productId], references: [id],onDelete: Cascade)
-
+  shopifyMediaId  String?
   url         String
   altText     String?
 
@@ -126,7 +126,7 @@ model ProductMediaContext {
   id          String   @id @default(cuid())
   productId String
   product ProductContext @relation(fields: [productId], references: [id],onDelete: Cascade)
-
+  shopifyMediaId  String?
   url         String?
   altText     String?
 

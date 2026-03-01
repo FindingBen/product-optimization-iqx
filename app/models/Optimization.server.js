@@ -114,15 +114,15 @@ const input = {
   id: productId
 };
 
-if(context.title){
-  input.title = context.title;
+if(productContext.title){
+  input.title = productContext.title;
 
 }
-if(context.description){
-  input.descriptionHtml = context.description;
-}if(context.seoDescription){
+if(productContext.description){
+  input.descriptionHtml = productContext.description;
+}if(productContext.seoDescription){
   input.seo = {
-    description: context.seoDescription,
+    description: productContext.seoDescription,
   }
 }
 
@@ -137,11 +137,25 @@ console.log('Shopify update response:', result);
     throw new Error("Shopify product update failed");
   }
 
-  const mediaVariable = {}
 
-  const mediaResult = await admin.graphql(IMAGE_ALT_UPDATE,{
-    variables:{}
-  })
+  const files = productMediasContext
+  .filter(m => m.altText && m.shopifyMediaId)
+  .map(m => ({
+    id: m.shopifyMediaId,
+    alt: m.altText,
+  }));
+  if (files.length > 0) {
+  const mediaResult = await admin.graphql(IMAGE_ALT_UPDATE, {
+    variables: { files },
+  });
+
+  const mediaData = await mediaResult.json();
+
+  if (mediaData.data.fileUpdate.userErrors.length) {
+    console.error(mediaData.data.fileUpdate.userErrors);
+    throw new Error("Media alt update failed");
+  }
+}
 
 const updateProduct = await prisma.product.update({
   where:{
