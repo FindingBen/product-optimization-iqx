@@ -1,5 +1,5 @@
 import prisma from "../db.server";
-import {GET_ALL_PRODUCTS} from "../Queries/queries";
+import {GET_ALL_PRODUCTS,UPDATE_PRODUCT} from "../Queries/queries";
 import { updateBusinessRuleset,getBusinessRuleset } from "./BusinessRuleset.server";
 import {ProductAnalyzer} from "../Analyzer/product_analyzer";
 
@@ -68,7 +68,7 @@ export async function scanProducts({ session, admin }) {
             ?.filter(edge => edge.node?.image)
             ?.map(edge => edge.node.image) || [];
         if (images.length > 0) {
-          await tx.productMediaContext.createMany({
+          await tx.productMedia.createMany({
             data: images.map((img) => ({
               productId: product.id,
               url: img.url,
@@ -138,7 +138,6 @@ export async function deleteProducts({session, admin}){
 
 }
 
-
 export async function handleProductCreate(shop, payload) {
   const shopifyProductId = payload.id?.toString();
 
@@ -165,7 +164,7 @@ export async function handleProductCreate(shop, payload) {
     });
 
     if (payload.images?.length) {
-      await tx.productMediaContext.createMany({
+      await tx.productMedia.createMany({
         data: payload.images.map((image) => ({
           productId: product.shopifyProductId,
           url: image.src,
@@ -226,9 +225,9 @@ export async function handleProductUpdate(shop, payload) {
     });
 
     // Replace media for this product context with the latest images (handles alt text changes)
-    await tx.productMediaContext.deleteMany({ where: { productId: product.id } });
+    await tx.productMedia.deleteMany({ where: { productId: product.id } });
     if (payload.images?.length) {
-      await tx.productMediaContext.createMany({
+      await tx.productMedia.createMany({
         data: payload.images.map((image) => ({
           productId: product.id,
           url: image.src,
@@ -294,7 +293,7 @@ export async function handleProductDelete(shop, payload) {
         // Remove analyses
         await tx.seoAnalysis.deleteMany({ where: { productId } });
 
-        await tx.productMediaContext.deleteMany({ where: { productContextId: { in: product.id } } });
+        await tx.productMedia.deleteMany({ where: { productContextId: { in: product.id } } });
         
 
         // Finally remove product record
@@ -303,7 +302,42 @@ export async function handleProductDelete(shop, payload) {
 }
 
 export async function handleUpdateProductShopify(admin, session, productId){
-  const response = await admin.graphql( GET_ALL_PRODUCTS, {variables: { first: 50 } });
+  const productPayload = await prisma.product.findUnique({
+    where: { id: productId },
+  });
+
+  if (!productPayload) {
+    throw new Error(`Product not found: ${productId}`);
+  }
+
+  // Ensure we pass a GraphQL global id (gid://shopify/Product/...) to the API
+  const rawShopifyId = productPayload.shopifyProductId || "";
+  const productGid = rawShopifyId.startsWith("gid://")
+    ? rawShopifyId
+    : `gid://shopify/Product/${rawShopifyId}`;
+
+  const input = {
+    id: productGid,
+    title: productPayload.title,
+    descriptionHtml: productPayload.description ?? null,
+    seo: {
+      title: productPayload.title ?? null,
+      description: productPayload.seoDescription ?? null,
+    },
+  };
+
+  // Call Shopify Admin GraphQL
+  const response = await admin.graphql(UPDATE_PRODUCT, { variables: { input } });
+
+  // Response shape: { productUpdate: { product, userErrors } }
+  const payload = response?.data?.productUpdate ?? response?.productUpdate ?? response;
+  const userErrors = payload?.userErrors ?? [];
+  if (userErrors.length > 0) {
+    console.warn("shopify productUpdate userErrors:", userErrors);
+    return { success: false, errors: userErrors };
+  }
+
+  return { success: true, product: payload.product };
 }
 
 function extractMetaDescription(html) {

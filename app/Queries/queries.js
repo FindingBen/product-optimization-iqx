@@ -99,3 +99,36 @@ query {
   }
 }
 `
+
+export const UPDATE_PRODUCT= `
+mutation productUpdate($input: ProductInput!) {
+  productUpdate(input: $input) {
+    product {
+      id
+      title
+      descriptionHtml
+    
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}`
+
+export const IMAGE_ALT_UPDATE = `
+mutation fileUpdate($files: [FileUpdateInput!]!) {
+  fileUpdate(files: $files) {
+    files {
+      id
+      alt
+      fileStatus
+    }
+    userErrors {
+      field
+      message
+      code
+    }
+  }
+}
+`

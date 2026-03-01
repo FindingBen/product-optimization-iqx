@@ -95,17 +95,39 @@ model Product {
   description       String?
   seoDescription    String?
   analyses          SeoAnalysis[]
+  media             ProductMedia[]
+  @@unique([shop, shopifyProductId])
+}
+
+model ProductContext {
+  id                String   @id @default(cuid())
+  shop              String
+  shopifyProductId  String
+  title             String
+  description       String?
+  seoDescription    String?
   media             ProductMediaContext[]
   @@unique([shop, shopifyProductId])
 }
 
 
-model ProductMediaContext {
+model ProductMedia {
   id          String   @id @default(cuid())
   productId String
   product Product @relation(fields: [productId], references: [id],onDelete: Cascade)
 
   url         String
+  altText     String?
+
+  createdAt   DateTime @default(now())
+}
+
+model ProductMediaContext {
+  id          String   @id @default(cuid())
+  productId String
+  product ProductContext @relation(fields: [productId], references: [id],onDelete: Cascade)
+
+  url         String?
   altText     String?
 
   createdAt   DateTime @default(now())

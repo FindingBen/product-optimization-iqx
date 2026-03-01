@@ -103,7 +103,12 @@ class ProductEnhancement{
     }
 
     async enhance_alt_text(){
+        if(!this.images || this.images.length === 0){
+            console.log("No images found for product, skipping alt text enhancement.");
+        return [];
+        }
         const image_info = normalizeImages(this.images)
+        console.log('AAAAAA',image_info)
         const prompt = ALT_TEXT_PROMPT(this.product.title,this.rules,image_info);
         const response = await this.client.chat.completions.create({
             model: "gpt-4",
@@ -113,7 +118,7 @@ class ProductEnhancement{
                 { role: "user", content: prompt },
             ],
         });
-        console.log('RAW',response)
+        console.log('RAW alt',response)
         const content =
             response?.choices?.[0]?.message?.content ?? response?.choices?.[0]?.text ?? "";
         console.log("Raw model response for title enhancement:", content);

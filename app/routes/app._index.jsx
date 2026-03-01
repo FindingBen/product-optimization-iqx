@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState,useCallback  } from "react";
 import { useFetcher, useNavigate, useLoaderData, redirect,useRevalidator } from "react-router";
 import { Modal, TitleBar } from "@shopify/app-bridge-react";
 import OptimizeProductModal from "../components/modals/optimizationModal"
 import ProductUpdateModal from "../components/modals/productUpdateModal"
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
-import {deleteBusinessRuleset,getBusinessRuleset,createBusinessRuleset} from "../models/BusinessRuleset.server";
+import ProductReviewDrawer from "../components/ProductReviewDrawer";
+import {getBusinessRuleset,createBusinessRuleset} from "../models/BusinessRuleset.server";
 import {scanProducts,deleteProducts,handleUpdateProductShopify} from "../models/Products.server";
-import {handleOptimization as handleOptimize,fetchOptimizationJobs} from "../models/Optimization.server"
+import {handleOptimization as handleOptimize,fetchOptimizationJobs,handleReject,handleApprove} from "../models/Optimization.server"
 import prisma from "../db.server";
 
 export const loader = async ({ request }) => {
@@ -43,6 +44,7 @@ export const loader = async ({ request }) => {
     return {
       id: product.id,
       title: product.title,
+      shopifyProductId: product.shopifyProductId,
       score,
       optimized: product.optimized,
       completeness: latestAnalysis?.completeness ?? "N/A",
@@ -82,21 +84,17 @@ export const action = async ({ request }) => {
   const intent = formData.get("intent");
   console.log('data', formData)
   if (intent === "scanProducts"){
-    console.log('scanning products...')
+
     return await scanProducts({session, admin});
   }
    if (intent === "rulesetConfigure"){
     const shop = session.shop
-    console.log('scanning products...')
+
     return await createBusinessRuleset({shop, admin});
-  }
-  else if (intent === "deleteRuleset") {
-    await deleteBusinessRuleset(session.shop);
-    return redirect("/app"); // re-load dashboard
   }
   else if (intent === "deleteProducts"){
     await deleteProducts({session, admin});
-    return {success:true} // re-load dashboard
+    return {success:true}
   }
   else if (intent === "handleOptimize") {
   const productId = formData.get("productId");
@@ -106,7 +104,7 @@ export const action = async ({ request }) => {
     admin,
     productId,
   });
-  console.log('optimized title', title)
+
   return { success: true };
 }
 else if (intent === "handleUpdateProduct"){
@@ -114,20 +112,59 @@ else if (intent === "handleUpdateProduct"){
   await handleUpdateProductShopify(admin, session, productId);
   return { success: true };
 }
+else if (intent === "loadReview") {
+  const productId = formData.get("productId");
 
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+  });
 
- 
+  if (!product) {
+    return { product: null, context: null };
+  }
+
+  const context = await prisma.productContext.findUnique({
+    where: {
+      shop_shopifyProductId: {
+        shop: session.shop,
+        shopifyProductId: product.shopifyProductId,
+      },
+    },
+    include: {
+      media: true,
+    },
+  });
+
+  return { product, context };
+}
+else if (intent === "handleReject"){
+  const productId = formData.get("productId");
+  await handleReject({session,productId})
+  return {success:true}
+}
+else if (intent === "handleApprove"){
+  
+  const productId = formData.get("productId");
+  await handleApprove({session,productId,admin})
+  return {success:true}
+}
 };
 
 
 export default function Index() {
   const fetcher = useFetcher();
+  const reviewFetcher = useFetcher();
+  const actionFetcher = useFetcher();
   // const shopify = useAppBridge();
+
+  const [optimizingId, setOptimizingId] = useState(null);
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
   const [rulesModalOpen, setRulesModalOpen] = useState(false);
-const [showModal, setShowModal] = useState(false);
-const [showProductModal, setShowProductModal] = useState(false);
-const [selectedProductId, setSelectedProductId] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState(null);
+  const [showReviewDrawer, setShowReviewDrawer] = useState(false);
+
   const isDeleting =
   fetcher.state === "submitting" &&
   fetcher.formData?.get("intent") === "deleteProducts";
@@ -143,7 +180,7 @@ const [selectedProductId, setSelectedProductId] = useState(null);
 
   const navigate = useNavigate();
   const revalidator = useRevalidator();
-  console.log('loader data', products)
+
 useEffect(() => {
   if (fetcher.state === "idle" && fetcher.data?.success) {
     revalidator.revalidate();
@@ -152,14 +189,42 @@ useEffect(() => {
 
 
 useEffect(() => {
+  if (fetcher.state === "idle" && optimizingId) {
+    setOptimizingId(null);
+  }
+}, [fetcher.state]);
+console.log('SELECTED PRODUCT ID',selectedProductId)
+const handleApprove = () =>{
+  setShowReviewDrawer(false);
+  actionFetcher.submit(
+    {intent: "handleApprove",
+productId: selectedProductId},
+{method:"post"}
+) 
+}
+
+const handleReject = () =>{
+  setShowReviewDrawer(false);
+  actionFetcher.submit(
+    {intent: "handleReject",
+productId: selectedProductId},
+{method:"post"}
+) 
+  
+
+}
+
+useEffect(() => {
   if (fetcher.state === "idle" && fetcher.data?.totalProducts) {
     setIsScanModalOpen(false);
   }
 }, [fetcher.state, fetcher.data]);
 
-  
-console.log('products', products)
+
 const handleOptimizeSubmit = (productId) => {
+  setOptimizingId(productId);      // mark row loading
+  setShowModal(false);             // close modal immediately
+
   fetcher.submit(
     {
       intent: "handleOptimize",
@@ -176,6 +241,12 @@ const handleUpdateProduct = (productId) =>{
     {method:"post"}
   )
 }
+console.log('PPPPPP',selectedProductId)
+const handleCloseDrawer = useCallback(() => {
+  setShowReviewDrawer(false);
+  setSelectedProductId(null);
+
+},[])
 
   if (!hasBusinessRuleset) {
   return (
@@ -475,31 +546,60 @@ return (
     </s-badge>
   </s-table-cell>
 
-  {/* NEW Optimize Button */}
   <s-table-cell align="end">
-    {product.optimized ? <s-button
-  variant="primary"
-  // onClick={() => {
-  //   setSelectedProductId(product.id);
-  //   setShowModal(true);
-  // }}
->
-  View
-</s-button>:<s-button
+  {optimizingId === product.id ? (
+    <s-spinner size="small" />
+  ) : product.optimized ? (
+    <s-button
   variant="primary"
   onClick={() => {
-    setSelectedProductId(product.id);
-    setShowModal(true);
-  }}
+      setSelectedProductId(product.shopifyProductId);
+  setShowReviewDrawer(true);
+  reviewFetcher.submit(
+    {
+      intent: "loadReview",
+      productId: product.id,
+    },
+    { method: "post" }
+  );
+}}
 >
-  Optimize
-</s-button>}
-  </s-table-cell>
+  View
+</s-button>
+  ) : (
+    <s-button
+      variant="primary"
+      onClick={() => {
+        setSelectedProductId(product.id);
+        setShowModal(true);
+      }}
+    >
+      Optimize
+    </s-button>
+  )}
+</s-table-cell>
 </s-table-row>
   ))}
 </s-table-body>
 <ProductUpdateModal showModal={showProductModal} onClose={() => setShowProductModal(false)} awaitUpdate={handleUpdateProduct} productId={selectedProductId}/>
-      <OptimizeProductModal showModal={showModal} onClose={() => setShowModal(false)} awaitOptimize={handleOptimizeSubmit} productId={selectedProductId}/>
+      <OptimizeProductModal
+  showModal={showModal}
+  onClose={() => setShowModal(false)}
+  onConfirm={() => handleOptimizeSubmit(selectedProductId)}
+/>
+<ProductReviewDrawer
+  open={showReviewDrawer}
+  onClose={handleCloseDrawer}
+  product={reviewFetcher.data?.product}
+  context={reviewFetcher.data?.context}
+  loading={
+    reviewFetcher.state === "submitting" ||
+    reviewFetcher.state === "loading" ||
+    !reviewFetcher.data // treat no data as loading
+  }
+  onApprove={handleApprove}
+  onReject={handleReject}
+/>
       </s-table>
       <Modal
     open={rulesModalOpen}
