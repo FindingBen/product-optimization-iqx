@@ -1,6 +1,7 @@
 import { useFetcher, useLoaderData, useRevalidator } from "react-router";
 import { useEffect, useState } from "react";
 import BusinessRulesetComponent from "../components/businessRulesetComponent";
+import OptimizationSettings from "../components/optimizationSettings";
 import "@shopify/polaris/build/esm/styles.css";
 import { authenticate } from "../shopify.server";
 
@@ -44,10 +45,10 @@ export const action = async ({request}) =>{
 
   return { success: true };
 }
+
 }
 
 export default function Settings(){
-
   const fetcher = useFetcher();
   fetcher.state === "submitting" &&
   fetcher.formData?.get("intent") === "deleteRuleset";
@@ -77,80 +78,17 @@ const handleUpdateRuleset = (updatedData) => {
     fetcher.submit(formData, { method: "post" });
   };
 
-
     return(
         <form method="post" data-save-bar>
  
   <input type="hidden" name="intent" value="updateRuleset" />
       <s-page heading="Settings" inlineSize="small">
-        {/* === */}
-        {/* Store Information */}
-        {/* === */}
-        <s-section heading="Store Information">
-          <s-text-field
-            label="Store name"
-            name="store-name"
-            value="Puzzlify Store"
-            placeholder="Enter store name"
-          />
-          <s-text-field
-            label="Business address"
-            name="business-address"
-            value="123 Main St, Anytown, USA"
-            placeholder="Enter business address"
-          />
-          <s-text-field
-            label="Store phone"
-            name="store-phone"
-            value="+1 (555) 123-4567"
-            placeholder="Enter phone number"
-          />
-          <s-choice-list label="Primary currency" name="currency">
-            <s-choice value="usd" selected>
-              US Dollar ($)
-            </s-choice>
-            <s-choice value="cad">Canadian Dollar (CAD)</s-choice>
-            <s-choice value="eur">Euro (€)</s-choice>
-          </s-choice-list>
-        </s-section>
+        <OptimizationSettings businessRuleset={businessRuleset} />
 
-        {/* === */}
-        {/* Notifications */}
-        {/* === */}
-        <s-section heading="Notifications">
-          <s-select
-            label="Notification frequency"
-            name="notification-frequency"
-          >
-            <s-option value="immediately" selected>
-              Immediately
-            </s-option>
-            <s-option value="hourly">Hourly digest</s-option>
-            <s-option value="daily">Daily digest</s-option>
-          </s-select>
-          <s-choice-list
-            label="Notification types"
-            name="notifications-type"
-            multiple
-          >
-            <s-choice value="new-order" selected>
-              New order notifications
-            </s-choice>
-            <s-choice value="low-stock">Low stock alerts</s-choice>
-            <s-choice value="customer-review">
-              Customer review notifications
-            </s-choice>
-            <s-choice value="shipping-updates">Shipping updates</s-choice>
-          </s-choice-list>
-        </s-section>
-
-        {/* === */}
-        {/* Preferences */}
-        {/* === */}
         <s-section heading="Ruleset">
   {businessRuleset ? (
     <>
-      <BusinessRulesetComponent businessData={businessRuleset} onSave={handleUpdateRuleset}/>
+      <BusinessRulesetComponent businessData={businessRuleset}/>
       <fetcher.Form method="post" style={{ marginTop: '1rem' }}>
         <input type="hidden" name="intent" value="deleteRuleset" />
         <s-button tone="critical" variant="secondary" type="submit">

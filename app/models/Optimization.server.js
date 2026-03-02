@@ -1,6 +1,7 @@
 import prisma from "../db.server";
 import {OpenAuthInit} from '../auth';
 import {ProductEnhancement} from "../Analyzer/ai_analyzer";
+import {ProductAnalyzer} from "../Analyzer/product_analyzer";
 import {UPDATE_PRODUCT, IMAGE_ALT_UPDATE} from "../Queries/queries";
 
 
@@ -12,6 +13,9 @@ export async function handleOptimization({
   const product = await prisma.product.findUnique({
     where: { id: productId },
   });
+  const rules = await prisma.businessRuleset.findUnique({
+    where: { shop },
+  });
 
   const images = await prisma.productMedia.findMany({
     where: { productId },
@@ -21,155 +25,231 @@ export async function handleOptimization({
     throw new Error("Product not found");
   }
 
-  const rules = await prisma.businessRuleset.findUnique({
-    where: { shop },
-  });
-
 
   const auth = new OpenAuthInit(admin || {});
   const client = await auth.clientAuth();
 
-  const enhancement = new ProductEnhancement(
-    client,
-    rules,
-    product,
-    images
-  );
+ const enhancement = new ProductEnhancement(
+  client,
+  rules,
+  product,
+  images
+);
 
-  const enhanced_title = await enhancement.enhance_title();
-  const enhanced_alt = await enhancement.enhance_alt_text()
-  const enhanced_description = await enhancement.enhance_description();
-  const enhanced_seo_description = await enhancement.enhance_description();
-  console.log('Enhanced alt text:', enhanced_alt);
-  await prisma.$transaction(async (tx) => {
-const productContext = await tx.productContext.upsert({
-  where: {
-    shop_shopifyProductId: {
+let enhanced_title = null;
+let enhanced_description = null;
+let enhanced_alt = null;
+
+// 1️⃣ Run only what is enabled
+if (rules.titleOptimize) {
+  enhanced_title = await enhancement.enhance_title();
+}
+
+if (rules.descriptionOptimize) {
+  enhanced_description = await enhancement.enhance_description();
+}
+
+if (rules.altTextOptimize) {
+  enhanced_alt = await enhancement.enhance_alt_text();
+}
+
+const updateData = {};
+
+if (enhanced_title) {
+  updateData.title = enhanced_title.title;
+}
+
+if (enhanced_description) {
+  updateData.description = enhanced_description.description;
+}
+
+if (enhanced_description?.metaDescription) {
+  updateData.seoDescription = enhanced_description.metaDescription;
+}
+
+await prisma.$transaction(async (tx) => {
+  const productContext = await tx.productContext.upsert({
+    where: {
+      shop_shopifyProductId: {
+        shop,
+        shopifyProductId: product.shopifyProductId,
+      },
+    },
+    update: updateData,
+    create: {
       shop,
       shopifyProductId: product.shopifyProductId,
+      ...updateData,
     },
-  },
-  update: {
-    title: enhanced_title.title,
-    description: enhanced_description.description,
-    seoDescription: enhanced_seo_description.metaDescription,
-  },
-  create: {
-    shop,
-    shopifyProductId: product.shopifyProductId,
-    title: enhanced_title.title,
-    description: enhanced_description.description,
-    seoDescription: enhanced_seo_description.metaDescription,
-  },
-});
+  });
 
-  const createImageAltText = await tx.productMediaContext.createMany({
-  data: enhanced_alt.map((img) => {
-    // find the original image object by ID
-    const original = images.find((i) => i.id === img.id);
+  // Only create alt text if it exists
+  if (enhanced_alt && enhanced_alt.length > 0) {
+    await tx.productMediaContext.createMany({
+      data: enhanced_alt.map((img) => {
+        const original = images.find((i) => i.id === img.id);
 
-    return {
-      productId: productContext.id,       // correct foreign key
-      url: original?.url || "https://placehold.it/300x300", // fallback if not found
-      altText: img.alt,                   // enhanced alt text
-    };
-  }),
-});
+        return {
+          productId: productContext.id,
+          url: original?.url ?? "https://placehold.it/300x300",
+          altText: img.alt,
+        };
+      }),
+    });
+  }
 
-  const optimizedJob = await tx.Optimization.create({
+  await tx.Optimization.create({
     data: {
-        shop,
-        productId,
-        status:"completed"}
-  })
+      shop,
+      productId,
+      status: "completed",
+    },
+  });
 
-  const updateProduct = await tx.product.update({
-    where:{id:productId},
-    data:{
-      optimized: true,
-    }
-  })
-  })
+  await tx.product.update({
+    where: { id: productId },
+    data: { optimized: true },
+  });
+});
 
   
   return enhanced_alt;
 }
 
-export async function handleApprove({session, productId,admin}){
-
-try {
-  const productContext = await prisma.productContext.findUnique({
-  where: {
-    shop_shopifyProductId: {
+export async function handleApprove({ session, productId, admin }) {
+  try {
+    // 1️⃣ Fetch product and its "draft context"
+    const productContext = await prisma.productContext.findUnique({
+      where: {
+        shop_shopifyProductId: {
           shop: session.shop,
           shopifyProductId: productId,
-        }}
+        },
+      },
+    });
+
+    const rules = await prisma.businessRuleset.findUnique({
+    where: { shop:session.shop },
   });
 
-  const productMediasContext = await prisma.productMediaContext.findMany({
-    where: { productId: productContext.id },
-  })
+    if (!productContext) {
+      throw new Error("No product context found for approval");
+    }
+    console.log("Product context found for approval:", productId);
+    const product = await prisma.product.findUnique({
+      where: { shop_shopifyProductId: {
+              shop:session.shop,
+              shopifyProductId: productId,
+            }, },
+    });
 
-const input = {
-  id: productId
-};
+    if (!product) {
+      throw new Error("Product not found");
+    }
 
-if(productContext.title){
-  input.title = productContext.title;
+    const productMediasContext = await prisma.productMediaContext.findMany({
+      where: { productId: productContext.id },
+    });
 
-}
-if(productContext.description){
-  input.descriptionHtml = productContext.description;
-}if(productContext.seoDescription){
-  input.seo = {
-    description: productContext.seoDescription,
+    // 2️⃣ Build Shopify input and local update payload
+    const input = { id: productId };
+    const data_update = { optimized: false };
+
+    if (productContext.title) {
+      input.title = productContext.title;
+      data_update.title = productContext.title;
+    }
+
+    if (productContext.description) {
+      input.descriptionHtml = productContext.description;
+      data_update.description = productContext.description;
+    }
+
+    if (productContext.seoDescription) {
+      input.seo = { description: productContext.seoDescription };
+      data_update.seoDescription = productContext.seoDescription;
+    }
+
+    // 3️⃣ Update Shopify product
+    const result = await admin.graphql(UPDATE_PRODUCT, { variables: { input } });
+    const data = await result.json();
+
+    if (data.data.productUpdate.userErrors.length > 0) {
+      console.error(data.data.productUpdate.userErrors);
+      throw new Error("Shopify product update failed");
+    }
+
+    // 4️⃣ Update Shopify media alt text
+    const files = productMediasContext
+      .filter((m) => m.altText && m.shopifyMediaId)
+      .map((m) => ({ id: m.shopifyMediaId, alt: m.altText }));
+
+    if (files.length > 0) {
+      const mediaResult = await admin.graphql(IMAGE_ALT_UPDATE, { variables: { files } });
+      const mediaData = await mediaResult.json();
+
+      if (mediaData.data.fileUpdate.userErrors.length > 0) {
+        console.error(mediaData.data.fileUpdate.userErrors);
+        throw new Error("Shopify media alt update failed");
+      }
+    }
+
+    // 5️⃣ Persist locally in a single transaction
+    await prisma.$transaction(async (tx) => {
+      // Update product record
+      await tx.product.update({
+        where: {
+          shop_shopifyProductId: { shopifyProductId: productId, shop: session.shop },
+        },
+        data: data_update,
+      });
+
+      // Delete the used draft context
+      await tx.productContext.delete({ where: { id: productContext.id } });
+
+      // Optionally clear productMediaContext alt texts to prevent duplication
+      if (productMediasContext.length > 0) {
+        await tx.productMedia.updateMany({
+          where: { productId },
+          data: { altText: null },
+        });
+      }
+    });
+
+    const updatedProduct = await prisma.product.findUnique({ where: { shop_shopifyProductId: { shopifyProductId: productId, shop: session.shop }, } });
+    const images = await prisma.productMedia.findMany({ where: { productId } });
+
+    const analyzer = new ProductAnalyzer(
+      {
+        id: updatedProduct.id,
+        title: updatedProduct.title,
+        description: updatedProduct.description,
+        parentImages: images,
+        variantImages: [],
+      },
+      rules
+    );
+
+    const analysis = analyzer.analyze();
+
+    await prisma.seoAnalysis.upsert({
+      where: { id: updatedProduct.id },
+      update: {
+        score: analysis.scores.seo,
+        completeness: Math.min(analysis.scores.completeness, 100),
+      },
+      create: {
+        productId: updatedProduct.id,
+        score: analysis.scores.seo,
+        completeness: Math.min(analysis.scores.completeness, 100),
+      },
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error(error);
+    throw error;
   }
-}
-
-  const result = await admin.graphql(UPDATE_PRODUCT, {
-    variables: { input },
-  });
-
- const data = await result.json();
-console.log('Shopify update response:', result);
-  if (data.data.productUpdate.userErrors.length) {
-    console.error(data.data.productUpdate.userErrors);
-    throw new Error("Shopify product update failed");
-  }
-
-
-  const files = productMediasContext
-  .filter(m => m.altText && m.shopifyMediaId)
-  .map(m => ({
-    id: m.shopifyMediaId,
-    alt: m.altText,
-  }));
-  if (files.length > 0) {
-  const mediaResult = await admin.graphql(IMAGE_ALT_UPDATE, {
-    variables: { files },
-  });
-
-  const mediaData = await mediaResult.json();
-
-  if (mediaData.data.fileUpdate.userErrors.length) {
-    console.error(mediaData.data.fileUpdate.userErrors);
-    throw new Error("Media alt update failed");
-  }
-}
-
-const updateProduct = await prisma.product.update({
-  where:{
-    shop_shopifyProductId: {shopifyProductId: productId, shop: session.shop },
-  },
-  data:{
-    optimized:false,
-  }
-})
-console.log('AAAAAAAa')
-} catch (error) {
-  console.error(error);
-  throw error;
-}
 }
 
 export async function handleReject({ session, productId }) {

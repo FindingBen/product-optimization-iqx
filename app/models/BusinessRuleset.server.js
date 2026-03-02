@@ -18,6 +18,9 @@ export async function getBusinessRuleset(shop) {
       productTagRule: true,
       productAltImageRule: true,
       keywords: true,
+      titleOptimize: true,
+      descriptionOptimize: true,
+      altTextOptimize: true,
       minTitleLength: true,
       maxTitleLength: true,
       productDescriptionTemplate: true,
@@ -58,38 +61,37 @@ export async function createBusinessRuleset({ shop, ...data }) {
 export async function updateBusinessRuleset({ shop, ...raw }) {
   const data = {};
 
-  if ("productNameRule" in raw)
-    data.productNameRule = raw.productNameRule;
+  console.log('RAW DATA IN UPDATE', raw);
 
-  if ("productDescriptionRule" in raw)
-    data.productDescriptionRule = raw.productDescriptionRule;
+  // List of boolean fields in your schema
+  const booleanFields = [
+    "requiresAltText",
+    "titleOptimize",
+    "descriptionOptimize",
+    "altTextOptimize",
+    "productScan",
+  ];
 
-  if ("productImageRule" in raw)
-    data.productImageRule = raw.productImageRule;
+  const numFields = [""];
 
-  if ("productVariantRule" in raw)
-    data.productVariantRule = raw.productVariantRule;
+  // Process all fields dynamically
+  for (const [key, value] of Object.entries(raw)) {
+    if (value === undefined) continue;
 
-  if ("productTagRule" in raw)
-    data.productTagRule = raw.productTagRule;
+    // Handle boolean fields
+    if (booleanFields.includes(key)) {
+      data[key] = value === "true" || value === true;
+    }
+    // Handle number fields
+    else if (numFields.includes(key) && value !== "") {
+      data[key] = parseInt(value);
+    }
 
-  if ("productAltImageRule" in raw)
-    data.productAltImageRule = raw.productAltImageRule;
-
-  if ("keywords" in raw)
-    data.keywords = raw.keywords;
-
-  if ("minImages" in raw && raw.minImages !== "")
-    data.minImages = parseInt(raw.minImages);
-
-  if ("requiresAltText" in raw)
-    data.requiresAltText =
-      raw.requiresAltText === "true" || raw.requiresAltText === true;
-
-  // 🔒 Only update productScan if explicitly sent
-  if ("productScan" in raw)
-    data.productScan =
-      raw.productScan === "true" || raw.productScan === true;
+    // Handle string / other fields
+    else {
+      data[key] = value;
+    }
+  }
 
   return db.businessRuleset.update({
     where: { shop },

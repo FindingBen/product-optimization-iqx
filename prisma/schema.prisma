@@ -58,6 +58,11 @@ model BusinessRuleset {
   productTagRule               String?
   productAltImageRule          String?
 
+
+  titleOptimize                Boolean?  @default(true)
+  descriptionOptimize          Boolean?  @default(true)
+  seoOptimize                  Boolean?  @default(true)
+  altTextOptimize              Boolean?  @default(true)
   keywords                     String?
 
   minTitleLength               Int      @default(20)

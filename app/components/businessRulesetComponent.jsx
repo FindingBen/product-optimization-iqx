@@ -12,86 +12,14 @@ const BusinessRulesetComponent = ({ businessData, onSave }) => {
 
   if (!businessData) return null;
 
-  const updateField = (field, value) => {
-    setForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-    setIsDirty(true);
-  };
   console.log("BusinessRulesetComponent rendered with data:", form);
-  const handleSave = async () => {
-    await onSave(form);
-    setIsDirty(false);
-    setEditingField(null);
-  };
 
-  const handleCancel = () => {
-    setForm(businessData);
-    setIsDirty(false);
-    setEditingField(null);
-  };
-
-  const EditableField = ({ label, field, value, type = "text" }) => (
-    <s-stack gap="x-small">
-      <s-text variant="bodySm" tone="subdued">
-        {label}
-      </s-text>
-
-      {editingField === field ? (
-        <s-text-field
-          value={value || ""}
-          name={field}
-          type={type}
-          onChange={(e) => updateField(field, e.target.value)}
-          onBlur={() => setEditingField(null)}
-          autoFocus
-        />
-      ) : (
-        <s-box
-          padding="small"
-          background="surface"
-          border="base"
-          borderRadius="medium"
-          style={{ cursor: "pointer" }}
-          onClick={() => setEditingField(field)}
-        >
-          {value ? (
-            <s-text variant="bodyMd">{value}</s-text>
-          ) : (
-            <s-badge tone="attention">Not configured</s-badge>
-          )}
-        </s-box>
-      )}
-    </s-stack>
-  );
 
   return (
     <s-stack gap="large">
 
       {/* Sticky Save Bar */}
-      {isDirty && (
-        <s-box
-          padding="medium"
-          background="surface"
-          border="base"
-          borderRadius="medium"
-        >
-          <s-stack direction="inline" justifyContent="space-between">
-            <s-text variant="bodyMd">
-              Unsaved changes
-            </s-text>
-            <s-stack direction="inline" gap="small">
-              <s-button variant="secondary" onClick={handleCancel}>
-                Cancel
-              </s-button>
-              <s-button variant="primary" onClick={handleSave}>
-                Save
-              </s-button>
-            </s-stack>
-          </s-stack>
-        </s-box>
-      )}
+     
 
       {/* Main Card */}
       <s-box
@@ -114,21 +42,18 @@ const BusinessRulesetComponent = ({ businessData, onSave }) => {
             <s-stack gap="small">
               <s-text-field
                 name="productNameRule"
-                label="Mix Title Length"
+                label="Max Title Length"
                 value={form.minTitleLength || ""}
-                onInput={(e) =>
-                  setForm({ ...form, productNameRule: e.target.value })
-                }
+                disabled={true}
               />
               <s-text-field
                 label="Max Title Length"
                 field="maxTitleLength"
                 name="maxTitleLength"
+                disabled={true}
                 value={form.maxTitleLength}
                 type="number"
-                onInput={(e) =>
-                  setForm({ ...form, maxTitleLength: e.target.value })
-                }
+              
               />
               <s-text-field
                 label="Min Description Length"
@@ -136,9 +61,7 @@ const BusinessRulesetComponent = ({ businessData, onSave }) => {
                 value={form.minDescriptionLength}
                 name="minDescriptionLength"
                 type="number"
-                onInput={(e) =>
-                  setForm({ ...form, minDescriptionLength: e.target.value })
-                }
+                disabled={true}
               />
               <s-text-field
                 label="Max Description Length"
@@ -146,9 +69,7 @@ const BusinessRulesetComponent = ({ businessData, onSave }) => {
                 name="maxDescriptionLength"
                 value={form.maxDescriptionLength}
                 type="number"
-                onInput={(e) =>
-                  setForm({ ...form, maxDescriptionLength: e.target.value })
-                }
+                disabled={true}
               />
               <s-text-field
                 label="Minimum Images"
@@ -156,9 +77,7 @@ const BusinessRulesetComponent = ({ businessData, onSave }) => {
                 value={form.minImages}
                 type="number"
                 name="minImages"
-                onInput={(e) =>
-                  setForm({ ...form, minImages: e.target.value })
-                }
+                disabled={true}
               />
             </s-stack>
           </s-box>
