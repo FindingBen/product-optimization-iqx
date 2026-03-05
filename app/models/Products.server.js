@@ -345,6 +345,7 @@ export async function handleUpdateProductShopify(admin, session, productId){
   return { success: true, product: payload.product };
 }
 
+
 function extractMetaDescription(html) {
   if (!html) return null;
 

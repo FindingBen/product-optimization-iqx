@@ -1,4 +1,4 @@
-import {OpenAuthInit} from '../app/auth';
+import {OpenAuthInit} from '../app/auth.js';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

@@ -8,7 +8,8 @@ import { authenticate } from "../shopify.server";
 import ProductReviewDrawer from "../components/ProductReviewDrawer";
 import {getBusinessRuleset,createBusinessRuleset} from "../models/BusinessRuleset.server";
 import {scanProducts,deleteProducts,handleUpdateProductShopify} from "../models/Products.server";
-import {handleOptimization as handleOptimize,fetchOptimizationJobs,handleReject,handleApprove} from "../models/Optimization.server"
+import {optimizationQueue} from "../../app/Queue/optimizationQueue"
+import {fetchOptimizationJobs,handleReject,handleApprove} from "../models/Optimization.server"
 import prisma from "../db.server";
 
 export const loader = async ({ request }) => {
@@ -17,27 +18,25 @@ export const loader = async ({ request }) => {
   const businessRuleset = await getBusinessRuleset(session.shop);
   const optimizationJobs = await fetchOptimizationJobs({shop:session.shop})
   const products = await prisma.product.findMany({
-    where: {
-      shop: session.shop,
+  where: { shop: session.shop },
+  include: {
+    optimizations: {
+      orderBy: { createdAt: "desc" },
+      take: 1,
     },
-    include: {
-      analyses: {
-        orderBy: { createdAt: "desc" },
-        take: 1, // only latest score
-      },
-     media:{
-      
-     }
+    analyses: {
+      orderBy: { createdAt: "desc" },
+      take: 1,
     },
-    orderBy: {
-      title: "asc",
-    },
-  });
+    media: true,
+  },
+});
   // Transform into UI-friendly format
   const formattedProducts = products.map((product) => {
-    const latestAnalysis = product.analyses[0];
-    const images = product.media[0];
+    const latestAnalysis = product?.analyses[0] ?? null;
+    const image = product.media?.[0] ?? null;
     const score = latestAnalysis?.score ?? 0;
+    const latestOptimization = product?.optimizations[0] ?? null;
 
     const imageUrl = product.media?.[0]?.url ?? null;
 
@@ -46,7 +45,7 @@ export const loader = async ({ request }) => {
       title: product.title,
       shopifyProductId: product.shopifyProductId,
       score,
-      optimized: product.optimized,
+      optimizationStatus: latestOptimization?.status ?? "idle",
       completeness: latestAnalysis?.completeness ?? "N/A",
       imageUrl,
       createdAt: latestAnalysis?.createdAt ?? product.id,
@@ -96,16 +95,16 @@ export const action = async ({ request }) => {
     await deleteProducts({session, admin});
     return {success:true}
   }
-  else if (intent === "handleOptimize") {
+  else if (intent === "startOptimization") {
+
   const productId = formData.get("productId");
 
-  const title = await handleOptimize({
-    shop: session.shop,
-    admin,
-    productId,
-  });
+  await optimizationQueue.add("optimizeProduct", {
+  shop: session.shop,
+  productId,
+});
 
-  return { success: true };
+  return { queued: true };
 }
 else if (intent === "handleUpdateProduct"){
   const productId = formData.get("productId");
@@ -193,7 +192,23 @@ useEffect(() => {
     setOptimizingId(null);
   }
 }, [fetcher.state]);
-console.log('SELECTED PRODUCT ID',selectedProductId)
+
+
+const hasRunningJob = products.some(
+  (p) => p.optimizationStatus === "processing" ||
+         p.optimizationStatus === "queued"
+);
+
+useEffect(() => {
+  if (!hasRunningJob) return;
+
+  const interval = setInterval(() => {
+    revalidator.revalidate();
+  }, 4000);
+
+  return () => clearInterval(interval);
+}, [hasRunningJob]);
+
 const handleApprove = () =>{
   setShowReviewDrawer(false);
   actionFetcher.submit(
@@ -221,13 +236,14 @@ useEffect(() => {
 }, [fetcher.state, fetcher.data]);
 
 
+
 const handleOptimizeSubmit = (productId) => {
   setOptimizingId(productId);      // mark row loading
   setShowModal(false);             // close modal immediately
 
   fetcher.submit(
     {
-      intent: "handleOptimize",
+      intent: "startOptimization",
       productId,
     },
     { method: "post" }
@@ -547,25 +563,42 @@ return (
   </s-table-cell>
 
   <s-table-cell align="end">
-  {optimizingId === product.id ? (
-    <s-spinner size="small" />
-  ) : product.optimized ? (
+  {product.optimizationStatus === "processing" ? (
+    <s-button disabled>
+      <s-spinner size="small" /> In Progress
+    </s-button>
+  ) : product.optimizationStatus === "queued" ? (
+    <s-button disabled>
+      Queued
+    </s-button>
+  ) : product.optimizationStatus === "completed" ? (
     <s-button
-  variant="primary"
-  onClick={() => {
-      setSelectedProductId(product.shopifyProductId);
-  setShowReviewDrawer(true);
-  reviewFetcher.submit(
-    {
-      intent: "loadReview",
-      productId: product.id,
-    },
-    { method: "post" }
-  );
-}}
->
-  View
-</s-button>
+      variant="primary"
+      onClick={() => {
+        setSelectedProductId(product.shopifyProductId);
+        setShowReviewDrawer(true);
+
+        reviewFetcher.submit(
+          {
+            intent: "loadReview",
+            productId: product.id,
+          },
+          { method: "post" }
+        );
+      }}
+    >
+      View
+    </s-button>
+  ) : product.optimizationStatus === "failed" ? (
+    <s-button
+      tone="critical"
+      onClick={() => {
+        setSelectedProductId(product.id);
+        setShowModal(true);
+      }}
+    >
+      Retry
+    </s-button>
   ) : (
     <s-button
       variant="primary"

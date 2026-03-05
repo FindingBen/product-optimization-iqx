@@ -1,8 +1,8 @@
-import prisma from "../db.server";
-import {OpenAuthInit} from '../auth';
-import {ProductEnhancement} from "../Analyzer/ai_analyzer";
-import {ProductAnalyzer} from "../Analyzer/product_analyzer";
-import {UPDATE_PRODUCT, IMAGE_ALT_UPDATE} from "../Queries/queries";
+import prisma from "../db.server.js";
+import {OpenAuthInit} from '../auth.js';
+import {ProductEnhancement} from "../Analyzer/ai_analyzer.js";
+import {ProductAnalyzer} from "../Analyzer/product_analyzer.js";
+import {UPDATE_PRODUCT, IMAGE_ALT_UPDATE} from "../Queries/queries.js";
 
 
 export async function handleOptimization({
@@ -98,22 +98,25 @@ await prisma.$transaction(async (tx) => {
     });
   }
 
-  await tx.Optimization.create({
-    data: {
-      shop,
-      productId,
-      status: "completed",
-    },
-  });
+  // await tx.Optimization.update({
+  //   where:{
+  //     productId:product.id
+  //   },
+  //   data: {
+  //     shop,
+  //     productId,
+  //     status: "completed",
+  //   },
+  // });
 
-  await tx.product.update({
-    where: { id: productId },
-    data: { optimized: true },
-  });
+  // await tx.product.update({
+  //   where: { id: productId },
+  //   data: { optimized: true },
+  // });
 });
 
   
-  return enhanced_alt;
+  return {"status":"Completed","code":200};
 }
 
 export async function handleApprove({ session, productId, admin }) {
@@ -231,19 +234,35 @@ export async function handleApprove({ session, productId, admin }) {
     );
 
     const analysis = analyzer.analyze();
+    await prisma.$transaction(async (tx) => {
+    await tx.seoAnalysis.upsert({
+          where: { id: updatedProduct.id },
+          update: {
+            score: analysis.scores.seo,
+            completeness: Math.min(analysis.scores.completeness, 100),
+          },
+          create: {
+            productId: updatedProduct.id,
+            score: analysis.scores.seo,
+            completeness: Math.min(analysis.scores.completeness, 100),
+          },
+        });
 
-    await prisma.seoAnalysis.upsert({
-      where: { id: updatedProduct.id },
-      update: {
-        score: analysis.scores.seo,
-        completeness: Math.min(analysis.scores.completeness, 100),
+        await tx.optimization.updateMany({
+      where: {
+        productId: product.id,
+        shop: session.shop,
+        status: "completed",
       },
-      create: {
-        productId: updatedProduct.id,
-        score: analysis.scores.seo,
-        completeness: Math.min(analysis.scores.completeness, 100),
+      data: {
+        status: "approved",
       },
     });
+
+    })
+    
+
+
 
     return { success: true };
   } catch (error) {
@@ -253,6 +272,16 @@ export async function handleApprove({ session, productId, admin }) {
 }
 
 export async function handleReject({ session, productId }) {
+
+
+  const product = await prisma.product.findUnique({
+    where:{
+      shop_shopifyProductId:{
+        shop:session.shop,
+        shopifyProductId:productId
+      }
+    }
+  })
 
   await prisma.$transaction(async (tx) => {
     // Try to find the product context first
@@ -281,6 +310,16 @@ export async function handleReject({ session, productId }) {
   },
   data: { optimized: false },
 });
+await tx.optimization.updateMany({
+      where: {
+        productId: product.id,
+        shop: session.shop,
+        status: "completed",
+      },
+      data: {
+        status: "approved",
+      },
+    });
   });
 }
 
