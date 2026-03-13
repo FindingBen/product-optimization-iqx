@@ -1,5 +1,6 @@
 import { useFetcher, useLoaderData, useRevalidator } from "react-router";
 import { useEffect, useState } from "react";
+import  {getAutomationSettings,createAutomationSettings} from "../models/Automation.server";
 import BusinessRulesetComponent from "../components/businessRulesetComponent";
 import OptimizationSettings from "../components/optimizationSettings";
 import "@shopify/polaris/build/esm/styles.css";
@@ -13,7 +14,9 @@ export const loader = async ({ request }) => {
   );
   const businessRuleset = await getBusinessRuleset(session.shop);
 
-  return { businessRuleset: businessRuleset,};
+  const automationsettings = await getAutomationSettings(session)
+
+  return { businessRuleset: businessRuleset,automationsettings: automationsettings};
 };
 
 export const action = async ({request}) =>{
@@ -45,6 +48,13 @@ export const action = async ({request}) =>{
 
   return { success: true };
 }
+else if(intent === 'createAutomationSettings'){
+  const { session } = await authenticate.admin(request);
+
+  await createAutomationSettings(session.shop)
+
+  return { success: true };
+}
 
 }
 
@@ -53,9 +63,15 @@ export default function Settings(){
   fetcher.state === "submitting" &&
   fetcher.formData?.get("intent") === "deleteRuleset";
   const {
-  businessRuleset
+  businessRuleset,
+  automationsettings
+
 } = useLoaderData();
 const revalidator = useRevalidator();
+
+const [automationEnabled, setAutomationEnabled] = useState(
+  automationsettings?.enabled ?? false
+);
 
 useEffect(() => {
   if (fetcher.state === "idle" && fetcher.data?.success) {
@@ -64,19 +80,15 @@ useEffect(() => {
 }, [fetcher.state, fetcher.data]);
 
 
-const handleUpdateRuleset = (updatedData) => {
-    const formData = new FormData();
+const handleAutomationToggle = (checked) => {
+  setAutomationEnabled(checked);
 
-    formData.append("intent", "updateRuleset");
+  const formData = new FormData();
+  formData.append("intent", "createAutomationSettings");
+  formData.append("enabled", checked);
 
-    Object.entries(updatedData).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        formData.append(key, value);
-      }
-    });
-
-    fetcher.submit(formData, { method: "post" });
-  };
+  fetcher.submit(formData, { method: "post" });
+};
 
     return(
         <form method="post" data-save-bar>
@@ -104,7 +116,7 @@ const handleUpdateRuleset = (updatedData) => {
     </s-box>
   )}
 </s-section>
-        <s-section heading="Tools">
+        <s-section heading="Automation">
           <s-stack
             gap="none"
             border="base"
@@ -118,34 +130,20 @@ const handleUpdateRuleset = (updatedData) => {
                 gap="base"
               >
                 <s-box>
-                  <s-heading>Reset app settings</s-heading>
+                  <s-heading>Automation settings</s-heading>
                   <s-paragraph color="subdued">
-                    Reset all settings to their default values. This action
-                    cannot be undone.
+                    Enable automations
                   </s-paragraph>
                 </s-box>
-                <s-button tone="critical">Reset</s-button>
+                <s-switch
+                  label="Enable"
+                  checked={automationEnabled}
+                  onChange={(e) => handleAutomationToggle(e.target.checked)}
+                  details="Ensure all criteria are met before enabling"
+                />
               </s-grid>
             </s-box>
-            <s-box paddingInline="small-100">
-              <s-divider />
-            </s-box>
-
-            <s-box padding="small-100">
-              <s-grid
-                gridTemplateColumns="1fr auto"
-                alignItems="center"
-                gap="base"
-              >
-                <s-box>
-                  <s-heading>Export settings</s-heading>
-                  <s-paragraph color="subdued">
-                    Download a backup of all your current settings.
-                  </s-paragraph>
-                </s-box>
-                <s-button>Export</s-button>
-              </s-grid>
-            </s-box>
+            
           </s-stack>
       </s-section>
   </s-page>

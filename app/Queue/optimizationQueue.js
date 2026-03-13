@@ -8,5 +8,6 @@ export const optimizationQueue = new Queue("optimization", {
     backoff: { type: "exponential", delay: 5000 },
     removeOnComplete: false,      // keep for debugging
     removeOnFail: false,
+    
   },
 });

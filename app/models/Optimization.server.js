@@ -9,6 +9,7 @@ export async function handleOptimization({
   shop,
   admin,
   productId,
+  automationRule
 }) {
   const product = await prisma.product.findUnique({
     where: { id: productId },
@@ -16,6 +17,15 @@ export async function handleOptimization({
   const rules = await prisma.businessRuleset.findUnique({
     where: { shop },
   });
+
+
+
+const optimizationConfig = {
+  title: automationRule?.optimizeTitle ?? rules.titleOptimize,
+  description: automationRule?.optimizeDescription ?? rules.descriptionOptimize,
+  alt: automationRule?.optimizeAltText ?? rules.altTextOptimize,
+  seo: automationRule?.optimizeSeo ?? false
+};
 
   const images = await prisma.productMedia.findMany({
     where: { productId },
@@ -40,16 +50,15 @@ let enhanced_title = null;
 let enhanced_description = null;
 let enhanced_alt = null;
 
-// 1️⃣ Run only what is enabled
-if (rules.titleOptimize) {
+if (optimizationConfig.title) {
   enhanced_title = await enhancement.enhance_title();
 }
 
-if (rules.descriptionOptimize) {
+if (optimizationConfig.description) {
   enhanced_description = await enhancement.enhance_description();
 }
 
-if (rules.altTextOptimize) {
+if (optimizationConfig.alt) {
   enhanced_alt = await enhancement.enhance_alt_text();
 }
 
@@ -85,29 +94,21 @@ await prisma.$transaction(async (tx) => {
 
   // Only create alt text if it exists
   if (enhanced_alt && enhanced_alt.length > 0) {
-    await tx.productMediaContext.createMany({
-      data: enhanced_alt.map((img) => {
-        const original = images.find((i) => i.id === img.id);
+  await tx.productMediaContext.createMany({
+    data: enhanced_alt.map((img) => {
+      const original = images.find((i) => i.id === img.id);
 
-        return {
-          productId: productContext.id,
-          url: original?.url ?? "https://placehold.it/300x300",
-          altText: img.alt,
-        };
-      }),
-    });
-  }
+      return {
+        productId: productContext.id,
+        shopifyMediaId: img.id, // <-- ADD THIS
+        url: original?.url ?? "https://placehold.it/300x300",
+        altText: img.alt,
+      };
+    }),
+  });
+}
 
-  // await tx.Optimization.update({
-  //   where:{
-  //     productId:product.id
-  //   },
-  //   data: {
-  //     shop,
-  //     productId,
-  //     status: "completed",
-  //   },
-  // });
+  
 
   // await tx.product.update({
   //   where: { id: productId },
@@ -317,7 +318,7 @@ await tx.optimization.updateMany({
         status: "completed",
       },
       data: {
-        status: "approved",
+        status: "rejected",
       },
     });
   });

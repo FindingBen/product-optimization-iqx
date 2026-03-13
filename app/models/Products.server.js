@@ -1,7 +1,9 @@
 import prisma from "../db.server";
 import {GET_ALL_PRODUCTS,UPDATE_PRODUCT} from "../Queries/queries";
 import { updateBusinessRuleset,getBusinessRuleset } from "./BusinessRuleset.server";
+import {enqueueOptimization} from "./Automation.server"
 import {ProductAnalyzer} from "../Analyzer/product_analyzer";
+import {getAdminForShop} from "../shopify.auth"
 
 /**
  * Scan shop products and generate SEO analyses
@@ -144,11 +146,14 @@ export async function deleteProducts({session, admin}){
 }
 
 export async function handleProductCreate(shop, payload) {
-  const shopifyProductId = payload.id?.toString();
 
+  const admin = await getAdminForShop(shop);
+  const shopifyProductId = payload.admin_graphql_api_id.toString();
+  console.log("DATAAA",payload)
   const rules = await getBusinessRuleset(shop);
 
-  await prisma.$transaction(async (tx) => {
+  const product = await prisma.$transaction(async (tx) => {
+
     const product = await tx.product.upsert({
       where: {
         shop_shopifyProductId: {
@@ -168,17 +173,23 @@ export async function handleProductCreate(shop, payload) {
       },
     });
 
-    if (payload.images?.length) {
-      await tx.productMedia.createMany({
-        data: payload.images.map((image) => ({
-          productId: product.shopifyProductId,
-          url: image.src,
-          altText: image.alt ?? null,
-        })),
-      });
-    }
+    if (payload.media?.length) {
+  await tx.productMedia.createMany({
+    data: payload.media.map((media) => {
+      return {
+        productId: product.id,
+        shopifyMediaId: media.admin_graphql_api_id, // correct MediaImage id
+        url: media?.preview_image.src ?? null,
+        altText: media.alt ?? null,
+      };
+    }),
+  });
+}
 
-    const images = (payload.images || []).map((img) => ({ url: img.src, altText: img.alt ?? null }));
+    const images = (payload.images || []).map((img) => ({
+      url: img.src,
+      altText: img.alt ?? null,
+    }));
 
     const analyzer = new ProductAnalyzer(
       {
@@ -195,19 +206,55 @@ export async function handleProductCreate(shop, payload) {
 
     await tx.seoAnalysis.create({
       data: {
-        product: {
-          connect: { id: product.id },
-        },
+        product: { connect: { id: product.id } },
         score: analysis.scores.seo,
         completeness: Math.min(analysis.scores.completeness, 100),
       },
     });
+
+
+    return product
+
   });
+
+  const automations = await prisma.automationRule.findMany({
+    where: {
+      shop,
+      enable: true
+    }
+  });
+  if (automations.length === 0) {
+  console.log("No enabled automation rules found, skipping optimization");
+  return;
+}
+
+// Create automation runs
+const runsData = automations.map(rule => ({
+  shop,
+  productId: product.id,
+  ruleId: rule.id,
+  status: "pending"
+}));
+await prisma.automationRun.createMany({ data: runsData });
+
+for (const rule of automations) {
+  await enqueueOptimization(shop,
+    product.id);
+}
 }
 
 
 export async function handleProductUpdate(shop, payload) {
-  const shopifyProductId = payload.id?.toString();
+  const created = new Date(payload.created_at);
+  const updated = new Date(payload.updated_at);
+
+  const diffSeconds = (updated - created) / 1000;
+
+  if (diffSeconds < 3) {
+    console.log("Skipping auto-update triggered after product creation");
+    return;
+  }
+  const shopifyProductId = payload.admin_graphql_api_id.toString();
   const rules = await getBusinessRuleset(shop);
   await prisma.$transaction(async (tx) => {
     const product = await tx.product.upsert({
@@ -231,15 +278,21 @@ export async function handleProductUpdate(shop, payload) {
 
     // Replace media for this product context with the latest images (handles alt text changes)
     await tx.productMedia.deleteMany({ where: { productId: product.id } });
-    if (payload.images?.length) {
-      await tx.productMedia.createMany({
-        data: payload.images.map((image) => ({
-          productId: product.id,
-          url: image.src,
-          altText: image.alt ?? null,
-        })),
-      });
-    }
+       
+    if (payload.media?.length) {
+  await tx.productMedia.createMany({
+    data: payload.media.map((media) => {
+    
+
+      return {
+        productId: product.id,
+        shopifyMediaId: media.admin_graphql_api_id,
+        url: media?.preview_image.src ?? null,
+        altText: media.alt ?? null,
+      };
+    }),
+  });
+}
 
     const images = (payload.images || []).map((img) => ({ url: img.src, altText: img.alt ?? null }));
 
@@ -298,8 +351,7 @@ export async function handleProductDelete(shop, payload) {
         // Remove analyses
         await tx.seoAnalysis.deleteMany({ where: { productId } });
 
-        await tx.productMedia.deleteMany({ where: { productContextId: { in: product.id } } });
-        
+        await tx.productMedia.deleteMany({ where: { productId: product.id } });
 
         // Finally remove product record
         await tx.product.deleteMany({ where: { id: productId } });
@@ -351,4 +403,12 @@ function extractMetaDescription(html) {
 
   const stripped = html.replace(/<[^>]*>?/gm, "");
   return stripped.substring(0, 160);
+}
+
+
+function normalizeProductId(id) {
+  if (String(id).startsWith("gid://")) {
+    return id;
+  }
+  return `gid://shopify/Product/${id}`;
 }

@@ -7,45 +7,42 @@ import { getAdminForShop } from "../shopify.auth.js";
 const worker = new Worker(
   "optimization",
   async (job) => {
-    const { shop, productId } = job.data;
+    const { shop, productId, optimizationId,automationRule } = job.data;
 
     console.log(`Starting optimization → ${shop} → ${productId}`);
 
-    // Create record ONCE here
-    const optimization = await prisma.optimization.create({
-      data: {
-        shop,
-        productId,
-        status: "processing",
-      },
-    });
-    console.log('INITT4')
     try {
-      const {admin} = await getAdminForShop(shop);
-      console.log('INITT3')
+      const { admin } = await getAdminForShop(shop);
+
+      await prisma.optimization.update({
+        where: { id: optimizationId },
+        data: { status: "processing" }
+      });
+
       await handleOptimization({
         shop,
         admin,
         productId,
+        automationRule
       });
 
       await prisma.optimization.update({
-        where: { id: optimization.id },
-        data: { status: "completed" },
+        where: { id: optimizationId },
+        data: { status: "completed" }
       });
 
       await prisma.product.update({
         where: { id: productId },
-        data: { optimized: true },
+        data: { optimized: true }
       });
 
       console.log("Optimization completed");
+
     } catch (error) {
-      console.error("Optimization failed", error);
 
       await prisma.optimization.update({
-        where: { id: optimization.id },
-        data: { status: "failed" },
+        where: { id: optimizationId },
+        data: { status: "failed" }
       });
 
       throw error;
@@ -53,6 +50,6 @@ const worker = new Worker(
   },
   {
     connection: redis,
-    concurrency: 3,
+    concurrency: 3
   }
 );

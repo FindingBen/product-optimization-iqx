@@ -8,7 +8,7 @@ import { authenticate } from "../shopify.server";
 import ProductReviewDrawer from "../components/ProductReviewDrawer";
 import {getBusinessRuleset,createBusinessRuleset} from "../models/BusinessRuleset.server";
 import {scanProducts,deleteProducts,handleUpdateProductShopify} from "../models/Products.server";
-import {optimizationQueue} from "../../app/Queue/optimizationQueue"
+import {enqueueOptimization} from "../models/Automation.server"
 import {fetchOptimizationJobs,handleReject,handleApprove} from "../models/Optimization.server"
 import prisma from "../db.server";
 
@@ -81,7 +81,7 @@ export const action = async ({ request }) => {
   const { session, admin } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
-  console.log('data', formData)
+
   if (intent === "scanProducts"){
 
     return await scanProducts({session, admin});
@@ -98,11 +98,8 @@ export const action = async ({ request }) => {
   else if (intent === "startOptimization") {
 
   const productId = formData.get("productId");
-
-  await optimizationQueue.add("optimizeProduct", {
-  shop: session.shop,
-  productId,
-});
+    
+  await enqueueOptimization(session.shop, productId)
 
   return { queued: true };
 }

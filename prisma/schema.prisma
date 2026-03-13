@@ -1,16 +1,17 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
-// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
-// enough when changing adapters.
-// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
   provider = "sqlite"
   url      = "file:dev.sqlite"
+}
+
+enum AutomationType {
+  TITLE
+  DESCRIPTION
+  ALT_TEXT
+  SEO_DESCRIPTION
 }
 
 model Session {
@@ -31,18 +32,6 @@ model Session {
   emailVerified Boolean?  @default(false)
   refreshToken        String?
   refreshTokenExpires DateTime?
-}
-
-model QRCode {
-  id               Int      @id @default(autoincrement())
-  title            String
-  shop             String
-  productId        String
-  productHandle    String
-  productVariantId String
-  destination      String
-  scans            Int      @default(0)
-  createdAt        DateTime @default(now())
 }
 
 model BusinessRuleset {
@@ -139,13 +128,87 @@ model ProductMediaContext {
   createdAt   DateTime @default(now())
 }
 
+
 model Optimization {
-  id          String   @id @default(cuid())
-  shop              String
+  id        String   @id @default(cuid())
+  shop      String
+  productId String @unique
+  status    String
+  createdAt DateTime @default(now())
+
+  product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model AutomationSettings {
+  id String @id @default(cuid())
+
+  shop String @unique
+
+  enabled Boolean @default(false)
+
+  autoApprove Boolean @default(false)
+
+  optimizeTitle Boolean @default(false)
+  optimizeDescription Boolean @default(false)
+  optimizeAltText Boolean @default(false)
+  optimizeSeo Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AutomationRule {
+  id String @id @default(cuid())
+
+  shop String
+  name String @default("Product Optimization")
+
+  enable Boolean @default(true)
+
+  optimizeTitle Boolean @default(false)
+  optimizeDescription Boolean @default(false)
+  optimizeAltText Boolean @default(false)
+  optimizeSeo Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  runs AutomationRun[]
+}
+
+model AutomationRun {
+  id String @id @default(cuid())
+
+  shop String
   productId String
-  status String
-  createdAt        DateTime @default(now())
-  product Product? @relation(fields: [productId], references: [id])
+  ruleId String
+
+  status String @default("pending") 
+  // pending | running | completed | failed
+
+  startedAt DateTime?
+  completedAt DateTime?
+
+  rule AutomationRule @relation(fields: [ruleId], references: [id])
+
+  results AutomationResult[]
+
+  createdAt DateTime @default(now())
+}
+
+model AutomationResult {
+  id String @id @default(cuid())
+
+  runId String
+  type AutomationType
+  productId String
+  originalValue String?
+  optimizedValue String?
+
+  approved Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  run AutomationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
 }
 
 model SeoAnalysis {
