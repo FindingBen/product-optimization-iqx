@@ -117,7 +117,45 @@ await prisma.$transaction(async (tx) => {
 });
 
   
-  return {"status":"Completed","code":200};
+  const results = [];
+
+if (enhanced_title) {
+  results.push({
+    type: "TITLE",
+    originalValue: product.title ?? null,
+    optimizedValue: enhanced_title.title,
+  });
+}
+
+if (enhanced_description) {
+  results.push({
+    type: "DESCRIPTION",
+    originalValue: product.description ?? null,
+    optimizedValue: enhanced_description.description,
+  });
+
+  if (enhanced_description.metaDescription) {
+    results.push({
+      type: "SEO_DESCRIPTION",
+      originalValue: product.seoDescription ?? null,
+      optimizedValue: enhanced_description.metaDescription,
+    });
+  }
+}
+
+if (enhanced_alt?.length > 0) {
+  enhanced_alt.forEach((img) => {
+    const original = images.find((i) => i.id === img.id);
+    results.push({
+      type: "ALT_TEXT",
+      originalValue: original?.altText ?? null,
+      optimizedValue: img.alt,
+    });
+  });
+}
+
+return results
+
 }
 
 export async function handleApprove({ session, productId, admin }) {

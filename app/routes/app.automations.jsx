@@ -4,15 +4,39 @@ import AutomationTable from "../components/automationTable"
 import { authenticate } from "../shopify.server";
 import { useFetcher, useNavigate, useLoaderData, redirect,useRevalidator } from "react-router";
 import {getAutomationSettings, createAutomationRule,loadAutomations, updateAutomation} from "../models/Automation.server"
+import { getOrCreateSubscription  } from "../models/Subscription.server";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
 
   const automationSettings = await getAutomationSettings(session);
+  const automations = await loadAutomations(session);
+  const subscription = await getOrCreateSubscription(session.shop);
+  if (!subscription || subscription.planName === "free") {
+    throw redirect("/app/plans");
+  }
+ const allRuns = automations.flatMap((a) => a.runs);
+const totalRuns = allRuns.length;
+const completedRuns = allRuns.filter((r) => r.status === "completed").length;
+const failedRuns = allRuns.filter((r) => r.status === "failed").length;
+const finishedRuns = completedRuns + failedRuns; // exclude pending/running
 
-  const automations = await loadAutomations(session)
+const successRate = finishedRuns > 0 ? ((completedRuns / finishedRuns) * 100).toFixed(1) : 0;
+const failRate = finishedRuns > 0 ? ((failedRuns / finishedRuns) * 100).toFixed(1) : 0;
 
-  return { automationSettings,automations };
+
+  return {
+    automationSettings,
+    automations,
+    stats: {
+    total: automations.length,
+    totalRuns,
+    completedRuns,
+    failedRuns,
+    successRate,
+    failRate,
+  }
+  };
 };
 
 export const action = async ({ request }) => {
@@ -52,48 +76,35 @@ export default function AutomationPage() {
   const revalidator = useRevalidator();
   
   const [showModal, setShowModal] = useState(false);
-  const {automationSettings,automations} = useLoaderData()
+  const { automationSettings, automations, stats } = useLoaderData(); // ← add stats
   const navigate = useNavigate();
-  const stats = {
-    total: automations.length,
-    products: 0,
-    success: 0,
-    failed: 0
-  };
 
-
-useEffect(() => {
-  if (fetcher.state === "idle" && fetcher.data?.success) {
-    revalidator.revalidate();
-  }
-}, [fetcher.state, fetcher.data]);
-  console.log('AUTOM',automations)
+  useEffect(() => {
+    if (fetcher.state === "idle" && fetcher.data?.success) {
+      revalidator.revalidate();
+    }
+  }, [fetcher.state, fetcher.data]);
+  console.log('STATS',stats)
+  console.log('AUT',automations)
   if (!automationSettings) {
-  return (
-    <s-page heading="Automations">
-      <s-section>
-        <s-card>
-          <s-stack direction="block" alignment="center" gap="loose">
-
-            <s-heading>You must enable automations first</s-heading>
-
-            <s-text tone="subdued">
-              Go to settings and enable automations before creating automation rules.
-            </s-text>
-
-            <s-button
-              variant="primary"
-              onClick={() => navigate("/app/settings")}
-            >
-              Go to Settings
-            </s-button>
-
-          </s-stack>
-        </s-card>
-      </s-section>
-    </s-page>
-  );
-}
+    return (
+      <s-page heading="Automations">
+        <s-section>
+          <s-card>
+            <s-stack direction="block" alignment="center" gap="loose">
+              <s-heading>You must enable automations first</s-heading>
+              <s-text tone="subdued">
+                Go to settings and enable automations before creating automation rules.
+              </s-text>
+              <s-button variant="primary" onClick={() => navigate("/app/settings")}>
+                Go to Settings
+              </s-button>
+            </s-stack>
+          </s-card>
+        </s-section>
+      </s-page>
+    );
+  }
 
   return (
     <s-page heading="Automations">
@@ -104,52 +115,39 @@ useEffect(() => {
           gridTemplateColumns="@container (inline-size <= 250px) 1fr, 1fr auto 1fr auto 1fr"
           gap="small"
         >
-          <s-clickable
-            href="#"
-            paddingBlock="small-400"
-            paddingInline="small-100"
-            borderRadius="base"
-          >
+          <s-clickable href="#" paddingBlock="small-400" paddingInline="small-100" borderRadius="base">
             <s-grid gap="small-300">
               <s-heading>Total Automations</s-heading>
               <s-stack direction="inline" gap="small-200">
-                <s-text>{automations?.length}</s-text>
-                <s-badge tone="success" icon="arrow-up">
-                  0
-                </s-badge>
+                <s-text>{stats.total}</s-text>   {/* ← real value */}
+                <s-badge tone="success" icon="arrow-up">0</s-badge>
               </s-stack>
             </s-grid>
           </s-clickable>
+
           <s-divider direction="block" />
-          
-          <s-clickable
-            href="#"
-            paddingBlock="small-200"
-            paddingInline="small-100"
-            borderRadius="base"
-          >
+
+          <s-clickable href="#" paddingBlock="small-200" paddingInline="small-100" borderRadius="base">
             <s-grid gap="small-300">
-              <s-heading>Succsesfull automations</s-heading>
+              <s-heading>Successful Runs</s-heading>
               <s-stack direction="inline" gap="small-200">
-                <s-text>3.2%</s-text>
-                <s-badge tone="critical" icon="arrow-down">
-                  0.8%
+                <s-text>{stats.successRate}%</s-text>   {/* ← real value */}
+                <s-badge tone={stats.successRate >= 50 ? "success" : "critical"}>
+                  {stats.completedRuns} of {stats.totalRuns}
                 </s-badge>
               </s-stack>
             </s-grid>
           </s-clickable>
-          <s-clickable
-            href="#"
-            paddingBlock="small-200"
-            paddingInline="small-100"
-            borderRadius="base"
-          >
+
+          <s-divider direction="block" />
+
+          <s-clickable href="#" paddingBlock="small-200" paddingInline="small-100" borderRadius="base">
             <s-grid gap="small-300">
-              <s-heading>Failed Automations</s-heading>
+              <s-heading>Failed Runs</s-heading>
               <s-stack direction="inline" gap="small-200">
-                <s-text>0</s-text>
-                <s-badge tone="success" icon="arrow-up">
-                  0
+                <s-text>{stats.failRate}%</s-text>   {/* ← real value */}
+                <s-badge tone={stats.failRate > 0 ? "critical" : "success"}>
+                  {stats.failedRuns} of {stats.totalRuns}
                 </s-badge>
               </s-stack>
             </s-grid>
@@ -162,33 +160,24 @@ useEffect(() => {
         <s-section>
           <s-card>
             <s-stack vertical alignment="center" gap="loose">
-
               <h2>No automations yet</h2>
-
-              <p>
-                Automatically optimize product titles, descriptions, SEO,
-                and image alt text using AI.
-              </p>
-
-              <s-button
-                variant="primary"
-                onClick={() => setShowModal(true)}
-              >
+              <p>Automatically optimize product titles, descriptions, SEO, and image alt text using AI.</p>
+              <s-button variant="primary" onClick={() => setShowModal(true)}>
                 Add Automation
               </s-button>
-
             </s-stack>
           </s-card>
         </s-section>
       )}
 
-      {/* Table */}
+      {/* Table — automations now include runs array */}
       {automations.length > 0 && (
-        <AutomationTable automations={automations}/>
+        <AutomationTable automations={automations} />
       )}
 
-      {/* Modal */}
-      {showModal && <CreateAutomationModal close={() => setShowModal(false)} showModal={showModal} />}
+      {showModal && (
+        <CreateAutomationModal close={() => setShowModal(false)} showModal={showModal} />
+      )}
 
     </s-page>
   );

@@ -128,6 +128,43 @@ model ProductMediaContext {
   createdAt   DateTime @default(now())
 }
 
+model Plan {
+  id          String   @id @default(cuid())
+
+  name        String   @unique
+  price       Float    @default(0.0)
+
+  monthlyOptimizationLimit  Int      @default(50)
+  automationsAllowed        Boolean  @default(false)
+  maxAutomationRules        Int      @default(0)
+
+  createdAt   DateTime @default(now())
+
+  subscriptions ShopSubscription[]   // ← add this
+}
+
+model ShopSubscription {
+  id          String   @id @default(cuid())
+
+  shop        String   @unique
+
+  planName    String   @default("free")
+
+  shopifySubscriptionId     String?
+  shopifyConfirmationUrl    String?
+
+  status      String   @default("pending")
+
+  billingCycleStart DateTime @default(now())
+  billingCycleEnd   DateTime?
+
+  optimizationsUsedThisCycle  Int  @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  plan        Plan     @relation(fields: [planName], references: [name])
+}
 
 model Optimization {
   id        String   @id @default(cuid())

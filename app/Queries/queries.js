@@ -132,3 +132,20 @@ mutation fileUpdate($files: [FileUpdateInput!]!) {
   }
 }
 `
+const env = process.env.NODE_ENV || "";
+const isTest = env.toLowerCase() !== "production";
+
+export const SUBSCRIPTION_CHARGE = `
+  mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean = ${isTest}) {
+    appSubscriptionCreate(name: $name, returnUrl: $returnUrl, lineItems: $lineItems, test: $test) {
+      userErrors {
+        field
+        message
+      }
+      appSubscription {
+        id
+      }
+      confirmationUrl
+    }
+  }
+`;

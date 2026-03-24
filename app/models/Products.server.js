@@ -238,8 +238,12 @@ const runsData = automations.map(rule => ({
 await prisma.automationRun.createMany({ data: runsData });
 
 for (const rule of automations) {
-  await enqueueOptimization(shop,
-    product.id);
+  // Find the run we just created for this specific rule
+  const automationRun = await prisma.automationRun.findFirst({
+    where: { shop, productId: product.id, ruleId: rule.id }
+  });
+
+  await enqueueOptimization(shop, product.id, rule, automationRun.id);
 }
 }
 

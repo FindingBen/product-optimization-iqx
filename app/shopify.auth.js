@@ -1,5 +1,3 @@
-import shopify from "./shopify.server.js";
-import prisma from "./db.server.js";
 import { unauthenticated } from "./shopify.server.js";
 
 

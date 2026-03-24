@@ -71,10 +71,16 @@ export async function enqueueAutomationJob(session,productId){
 });
 }
 
-export async function enqueueOptimization(shop, productId) {
+export async function enqueueOptimization(shop, productId, automationRule = null, automationRunId = null) {
  
-  const optimization = await prisma.optimization.create({
-    data: {
+  const optimization = await prisma.optimization.upsert({
+    where: { 
+      productId 
+    },
+    update: { 
+      status: "queued" 
+    },
+    create: {
       shop,
       productId,
       status: "queued"
@@ -84,17 +90,32 @@ export async function enqueueOptimization(shop, productId) {
   await optimizationQueue.add("optimize", {
     shop,
     productId,
-    optimizationId: optimization.id
+    optimizationId: optimization.id,
+    automationRule: automationRule ?? null,
+    automationRunId: automationRunId ?? null,
   });
 
   return optimization;
 }
 
-export async function loadAutomations(session){
+export async function loadAutomations(session) {
   const automations = await prisma.automationRule.findMany({
-  where: { shop: session.shop },
-  orderBy: { createdAt: "desc" }
-});
+    where: { shop: session.shop },
+    orderBy: { createdAt: "desc" },
+    include: {
+      runs: {
+        select: { status: true } // only fetch status, keep it light
+      }
+    }
+  });
 
-return automations
+  return automations;
+}
+
+export async function loadAutomationRuns(session){
+  const automationRuns = await prisma.AutomationRun.findMany(
+    {where: { shop: session.shop },}
+  )
+
+  return automationRuns
 }
