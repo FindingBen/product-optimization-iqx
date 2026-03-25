@@ -91,7 +91,7 @@ const handleAutomationToggle = (checked) => {
 };
 
     return(
-        <form method="post" data-save-bar>
+        <fetcher.Form method="post" data-save-bar>
  
   <input type="hidden" name="intent" value="updateRuleset" />
       <s-page heading="Settings" inlineSize="small">
@@ -147,6 +147,6 @@ const handleAutomationToggle = (checked) => {
           </s-stack>
       </s-section>
   </s-page>
-</form>
+</fetcher.Form>
     )
 }
