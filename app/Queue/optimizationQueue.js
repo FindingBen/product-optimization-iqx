@@ -6,8 +6,8 @@ export const optimizationQueue = new Queue("optimization", {
   defaultJobOptions: {
     attempts: 3,                  // retry 3 times
     backoff: { type: "exponential", delay: 5000 },
-    removeOnComplete: false,      // keep for debugging
-    removeOnFail: false,
+    removeOnComplete: 500,      // keep for debugging
+    removeOnFail: 20,
     
   },
 });

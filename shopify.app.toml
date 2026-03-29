@@ -32,6 +32,11 @@ api_version = "2026-04"
   topics = [ "products/update" ]
   uri = "/webhooks/products_update"
 
+  [[webhooks.subscriptions]]
+  topics = ["app_subscriptions/update"]
+  uri = "/webhooks/subscriptions_update"
+
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "write_products,write_files"

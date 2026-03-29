@@ -84,8 +84,7 @@ export default function AutomationPage() {
       revalidator.revalidate();
     }
   }, [fetcher.state, fetcher.data]);
-  console.log('STATS',stats)
-  console.log('AUT',automations)
+
   if (!automationSettings) {
     return (
       <s-page heading="Automations">

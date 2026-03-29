@@ -12,12 +12,22 @@ export async function getOrCreateSubscription(shop) {
       status: "active",
       billingCycleStart: new Date(),
     },
-    include: { plan: true },
+    select: {
+    shop: true,
+    planName: true,
+    nextPlanName: true,
+    billingCycleStart: true,
+    optimizationsUsedThisCycle: true,
+    billingCycleEnd: true,
+    plan: true,
+  },
   });
 }
 
 // Full subscription + plan for a shop
 export async function getSubscription(shop) {
+  await enforceBillingCycle(shop);
+
   return prisma.shopSubscription.findUnique({
     where: { shop },
     include: { plan: true },
@@ -27,13 +37,20 @@ export async function getSubscription(shop) {
 // Check if shop can run an optimization
 export async function canOptimize(shop) {
   const sub = await getSubscription(shop);
-  if (!sub || sub.status !== "active") return { allowed: false, reason: "No active subscription" };
+
+  if (!sub || sub.status !== "active") {
+    return { allowed: false, reason: "No active subscription" };
+  }
 
   const limit = sub.plan.monthlyOptimizationLimit;
-  if (limit === -1) return { allowed: true }; // unlimited
+
+  if (limit === -1) return { allowed: true };
 
   if (sub.optimizationsUsedThisCycle >= limit) {
-    return { allowed: false, reason: `Monthly limit of ${limit} optimizations reached` };
+    return {
+      allowed: false,
+      reason: `Monthly limit of ${limit} optimizations reached`,
+    };
   }
 
   return { allowed: true };
@@ -64,27 +81,22 @@ export async function canCreateAutomationRule(shop) {
 export async function incrementOptimizationUsage(shop) {
   await prisma.shopSubscription.update({
     where: { shop },
-    data: { optimizationsUsedThisCycle: { increment: 1 } },
-  });
-}
-
-// Reset usage counter — call this on billing cycle renewal webhook
-export async function resetBillingCycle(shop) {
-  await prisma.shopSubscription.update({
-    where: { shop },
     data: {
-      optimizationsUsedThisCycle: 0,
-      billingCycleStart: new Date(),
+      optimizationsUsedThisCycle: { increment: 1 },
     },
   });
 }
+
 
 // Initiate Shopify subscription charge — returns confirmationUrl
 export async function createShopifySubscription(admin, shop, planName) {
   const plan = await prisma.plan.findUnique({ where: { name: planName } });
   if (!plan || plan.price === 0) throw new Error("Invalid paid plan");
 
-  const returnUrl = `${process.env.SHOPIFY_APP_URL}/app/plans/confirm?shop=${shop}&plan=${planName}`;
+  const returnUrl = buildAdminEmbeddedReturnUrl(
+    shop,
+    "/app/plans/confirm" // this should be the in-app route you want
+  );
 
   const response = await admin.graphql(SUBSCRIPTION_CHARGE, {
     variables: {
@@ -110,11 +122,10 @@ export async function createShopifySubscription(admin, shop, planName) {
     throw new Error(result.userErrors[0].message);
   }
 
-  // Save pending subscription
   await prisma.shopSubscription.update({
     where: { shop },
     data: {
-      planName,
+      nextPlanName: planName,
       status: "pending",
       shopifySubscriptionId: result.appSubscription.id,
       shopifyConfirmationUrl: result.confirmationUrl,
@@ -124,30 +135,85 @@ export async function createShopifySubscription(admin, shop, planName) {
   return result.confirmationUrl;
 }
 
-// Called after Shopify redirects back with confirmed charge
 export async function activateSubscription(shop, shopifySubscriptionId) {
+  const now = new Date();
+
+  const sub = await prisma.shopSubscription.findUnique({
+    where: { shop },
+  });
+
+  const nextPlan = sub.nextPlanName || sub.planName;
+
   await prisma.shopSubscription.update({
     where: { shop },
     data: {
       status: "active",
       shopifySubscriptionId,
+
+      // ✅ apply scheduled plan
+      planName: nextPlan,
+      nextPlanName: null,
+
+      billingCycleStart: now,
+      billingCycleEnd: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+
       optimizationsUsedThisCycle: 0,
-      billingCycleStart: new Date(),
     },
   });
 }
 
-// Downgrade to free (on cancel/expiry)
+export async function cancelSubscription(shop){
+  const sub = await prisma.shopSubscription.update({
+    where: { shop },
+    data: {
+      nextPlanName: null,
+      billingCycleEnd: null,
+    },
+  });
+}
+
 export async function downgradeToFree(shop) {
   await prisma.shopSubscription.update({
     where: { shop },
     data: {
-      planName: "free",
-      status: "active",
-      shopifySubscriptionId: null,
-      shopifyConfirmationUrl: null,
-      optimizationsUsedThisCycle: 0,
-      billingCycleStart: new Date(),
+      nextPlanName: "free", // ✅ schedule downgrade
     },
+  });
+}
+
+
+function buildAdminEmbeddedReturnUrl(shop, path) {
+
+  const storeHandle = shop.replace(".myshopify.com", "");
+
+  // This is the pattern Shopify shows in docs:
+  // https://admin.shopify.com/store/{store-handle}/apps/{your-app-handle}/{your-path}
+  return `https://admin.shopify.com/store/${storeHandle}/apps/${process.env.SHOPIFY_APP_HANDLE}${path}`;
+}
+
+async function enforceBillingCycle(shop) {
+  const sub = await prisma.shopSubscription.findUnique({
+    where: { shop },
+  });
+
+  if (!sub || !sub.billingCycleEnd) return sub;
+
+  const now = new Date();
+
+  if (now < sub.billingCycleEnd) return sub;
+
+  // 🔁 Cycle expired → rotate
+  const nextPlan = sub.nextPlanName || sub.planName;
+
+  return prisma.shopSubscription.update({
+    where: { shop },
+    data: {
+      planName: nextPlan,
+      nextPlanName: null,
+      optimizationsUsedThisCycle: 0,
+      billingCycleStart: now,
+      billingCycleEnd: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000), // 30 days
+    },
+    include: { plan: true },
   });
 }

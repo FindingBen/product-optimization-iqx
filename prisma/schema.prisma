@@ -149,12 +149,12 @@ model ShopSubscription {
   shop        String   @unique
 
   planName    String   @default("free")
-
+  nextPlanName String?
   shopifySubscriptionId     String?
   shopifyConfirmationUrl    String?
 
   status      String   @default("pending")
-
+  
   billingCycleStart DateTime @default(now())
   billingCycleEnd   DateTime?
 

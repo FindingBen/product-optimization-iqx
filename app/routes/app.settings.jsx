@@ -116,7 +116,7 @@ const handleAutomationToggle = (checked) => {
     </s-box>
   )}
 </s-section>
-        <s-section heading="Automation">
+        {/* <s-section heading="Automation">
           <s-stack
             gap="none"
             border="base"
@@ -145,7 +145,7 @@ const handleAutomationToggle = (checked) => {
             </s-box>
             
           </s-stack>
-      </s-section>
+      </s-section> */}
   </s-page>
 </fetcher.Form>
     )

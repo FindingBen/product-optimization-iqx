@@ -1,7 +1,7 @@
 import { useLoaderData, useFetcher } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
-  downgradeToFree,
+  cancelSubscription,
   getOrCreateSubscription,
   createShopifySubscription,
 } from "../models/Subscription.server";
@@ -20,13 +20,31 @@ export const loader = async ({ request }) => {
 export const action = async ({ request }) => {
   const { session, admin } = await authenticate.admin(request);
   const formData = await request.formData();
+  const intent = formData.get("intent");
   const planName = formData.get("planName");
 
-  if (planName === "free") {
-    await downgradeToFree(session.shop);
+  if (intent === "cancel-plan") {
+    await cancelSubscription(session.shop);
     return { success: true };
   }
 
+  // Determine if this is an upgrade or downgrade
+  const sub = await getOrCreateSubscription(session.shop);
+  const currentPlan = await prisma.plan.findUnique({ where: { name: sub.planName } });
+  const targetPlan = await prisma.plan.findUnique({ where: { name: planName } });
+
+  const isDowngrade = targetPlan.price < currentPlan.price;
+
+  if (isDowngrade) {
+    // Just schedule it — do NOT call Shopify, do NOT change current plan
+    await prisma.shopSubscription.update({
+      where: { shop: session.shop },
+      data: { nextPlanName: planName },
+    });
+    return { success: true, scheduled: true, planName };
+  }
+
+  // Upgrade — create new Shopify charge immediately
   const confirmationUrl = await createShopifySubscription(admin, session.shop, planName);
   return { confirmationUrl };
 };
@@ -38,7 +56,7 @@ const PLAN_FEATURES = {
     "SEO scoring",
     "Manual optimize only",
   ],
-  starter: [
+  "ProductIQX Starter": [
     "500 optimizations / month",
     "Title, description & alt text",
     "SEO scoring",
@@ -46,7 +64,7 @@ const PLAN_FEATURES = {
     "New product auto-optimize",
     "Priority queue",
   ],
-  pro: [
+  "ProductIQX Pro": [
     "Unlimited optimizations",
     "Title, description & alt text",
     "SEO scoring",
@@ -54,14 +72,13 @@ const PLAN_FEATURES = {
     "New product auto-optimize",
     "Priority queue",
     "Bulk optimization",
-    "Early access to new features",
   ],
 };
 
 const PLAN_META = {
   free:    { accent: "#6d7175", label: null,       icon: "○" },
-  starter: { accent: "#007a5e", label: "Popular",  icon: "◆" },
-  pro:     { accent: "#005e9e", label: "Best Value",icon: "★" },
+  "ProductIQX Starter": { accent: "#007a5e", label: "Popular",  icon: "◆" },
+  "ProductIQX Pro":     { accent: "#005e9e", label: "Best Value",icon: "★" },
 };
 
 function CheckIcon() {
@@ -78,7 +95,7 @@ function PlanCard({ plan, currentPlanName, onUpgrade, isLoading }) {
   const meta = PLAN_META[plan.name] ?? PLAN_META.free;
   const isCurrent = plan.name === currentPlanName;
   const isDowngrade = plan.price < (PLAN_META[currentPlanName]?.price ?? 0);
-  const isPro = plan.name === "pro";
+  const isPro = plan.name === "ProductIQX Pro";
 
   return (
     <div style={{
@@ -268,10 +285,26 @@ function PlanCard({ plan, currentPlanName, onUpgrade, isLoading }) {
   );
 }
 
+function formatDateTime(dateInput) {
+  if (!dateInput) return "";
+
+  const date = new Date(dateInput);
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 export default function PlansPage() {
   const { subscription, plans } = useLoaderData();
   const fetcher = useFetcher();
-
+  const startDate = new Date(subscription.billingCycleEnd)
   const isLoading = fetcher.state !== "idle";
 
   const handleUpgrade = (planName) => {
@@ -280,11 +313,11 @@ export default function PlansPage() {
 
   // Redirect to Shopify confirmation URL if returned
   if (fetcher.data?.confirmationUrl) {
-    window.location.href = fetcher.data.confirmationUrl;
+    window.top.location.href = fetcher.data.confirmationUrl;
   }
 
   const currentPlan = subscription?.plan;
-
+  console.log(currentPlan?.name)
   return (
     <s-page heading="Plans & Billing">
 
@@ -376,8 +409,73 @@ export default function PlansPage() {
         </div>
       </s-section>
 
+      
       {/* FAQ / notes */}
       <s-section>
+         <s-card>
+          <s-stack direction="block" gap="base">
+  <div style={{display:"flex" , flexDirection:"row"}}>
+    <s-heading>Next plan billing</s-heading>
+  <div>
+            
+      </div>
+  </div>
+
+  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+    
+    {/* Date */}
+    <span style={{
+      fontSize: 11,
+      fontWeight: 600,
+      letterSpacing: "0.06em",
+      textTransform: "uppercase",
+      color: "#8c9196"
+    }}>
+      {subscription?.billingCycleEnd
+        ? formatDateTime(subscription.billingCycleEnd)
+        : ""}
+    </span>
+
+    {/* Plan row */}
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      
+
+      <span style={{ fontSize: 18, fontWeight: 800, color: "#1a1a1a" }}>
+        {subscription?.nextPlanName || "No plan active"}
+      </span>
+
+      {/* Status badge */}
+      <span style={{
+        fontSize: 11,
+        fontWeight: 600,
+        padding: "2px 8px",
+        borderRadius: 20,
+        background: subscription?.status === "active"
+          ? "rgba(0,122,94,0.1)"
+          : "rgba(215,44,13,0.1)",
+        color: subscription?.status === "active"
+          ? "#007a5e"
+          : "#1ca727",
+        border: `1px solid ${
+          subscription?.status === "active"
+            ? "rgba(0,122,94,0.25)"
+            : "rgba(165, 143, 140, 0.25)"
+        }`,
+      }}>
+        {subscription?.status ?? "active"}
+      </span>
+    
+    
+    </div>
+
+      
+
+  </div>
+</s-stack>
+        </s-card>
+      </s-section>
+      <s-section>
+        
         <s-card>
           <s-stack direction="block" gap="base">
             <s-heading>Billing notes</s-heading>

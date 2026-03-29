@@ -1,4 +1,5 @@
 import JSON5 from "json5";
+import { RetrySafeOpenAI } from "./retry_component.js"
 import {BUSINESS_RULESET_PROMPT,PRODUCT_TITLE_PROMPT,PRODUCT_DESC_PROMPT,META_DESC_PROMPT,ALT_TEXT_PROMPT} from "../Prompts/prompts.js";
 
 
@@ -8,11 +9,10 @@ class Prompting{
         this.data = data;
     }
 
-
     async analyze_business(){
         const prompt = BUSINESS_RULESET_PROMPT(JSON.stringify(this.data, null, 2));
         const response = await this.client.chat.completions.create({
-            model: "gpt-4",
+            model: process.env.GPT_MODEL,
             temperature: 0.2,
             messages: [
                 { role: "system", content: "You are an ecommerce business classifier." },
@@ -25,13 +25,12 @@ class Prompting{
             try {
                 return JSON5.parse(text);
             } catch (err) {
-                // Try to extract JSON from triple-backtick code fences
+
                 const fence = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
                 if (fence && fence[1]) {
                     return JSON5.parse(fence[1]);
                 }
 
-                // Try to extract the first {...} or [...] block
                 const firstBrace = text.indexOf("{");
                 const lastBrace = text.lastIndexOf("}");
                 if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
@@ -60,87 +59,64 @@ class Prompting{
 
 }
 
-class ProductEnhancement{
-    constructor(client,rules,product,images){
-        this.client = client;
-        this.rules = rules;
-        this.product = product;
-        this.images = images;
-    }
+class ProductEnhancement {
+  constructor(client, rules, product, images) {
+    // Wrap the raw OpenAI client in the retry-safe wrapper
+    this.ai = new RetrySafeOpenAI({ client });
+    this.rules = rules;
+    this.product = product;
+    this.images = images;
+  }
 
-    async enhance_title(){
-        const prompt = PRODUCT_TITLE_PROMPT(this.product.title,this.rules,this.product.id);
-        console.log("Prompt for title enhancement:", prompt);
-        const response = await this.client.chat.completions.create({
-            model: "gpt-4",
-            temperature: 0.2,
-            messages: [
-                
-                { role: "user", content: prompt },
-            ],
-        });
-        console.log('RAW',response)
-        const content =
-            response?.choices?.[0]?.message?.content ?? response?.choices?.[0]?.text ?? "";
-        console.log("Raw model response for title enhancement:", content);
-        return JSON5.parse(content);    }
+  async enhance_title() {
+    const prompt = PRODUCT_TITLE_PROMPT(this.product.title, this.rules, this.product.id);
+    const response = await this.ai.chatCompletion({
+      model: process.env.GPT_MODEL,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const content = response?.choices?.[0]?.message?.content ?? "";
+    console.log(`input:${response.usage?.prompt_tokens} | output:${response.usage?.completion_tokens} | total:${response.usage?.total_tokens}`);
+    return JSON5.parse(content);
+  }
 
-    async enhance_description(){
-        const prompt = PRODUCT_DESC_PROMPT(this.product.title,this.rules,this.product.id);
-        const response = await this.client.chat.completions.create({
-            model: "gpt-4",
-            temperature: 0.2,
-            messages: [
-                
-                { role: "user", content: prompt },
-            ],
-        });
-        console.log('RAW',response)
-        const content =
-            response?.choices?.[0]?.message?.content ?? response?.choices?.[0]?.text ?? "";
-        console.log("Raw model response for title enhancement:", content);
-        return JSON5.parse(content);
-    }
+  async enhance_description() {
+    const prompt = PRODUCT_DESC_PROMPT(this.product.title, this.rules, this.product.id);
+    const response = await this.ai.chatCompletion({
+      model: process.env.GPT_MODEL,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const content = response?.choices?.[0]?.message?.content ?? "";
+    console.log(`input:${response.usage?.prompt_tokens} | output:${response.usage?.completion_tokens} | total:${response.usage?.total_tokens}`);
+  
+    return JSON5.parse(content);
+  }
 
-    async enhance_alt_text(){
-        if(!this.images || this.images.length === 0){
-            console.log("No images found for product, skipping alt text enhancement.");
-        return [];
-        }
-        const image_info = normalizeImages(this.images)
-        console.log('AAAAAA',image_info)
-        const prompt = ALT_TEXT_PROMPT(this.product.title,this.rules,image_info);
-        const response = await this.client.chat.completions.create({
-            model: "gpt-4",
-            temperature: 0.2,
-            messages: [
-                
-                { role: "user", content: prompt },
-            ],
-        });
-        console.log('RAW alt',response)
-        const content =
-            response?.choices?.[0]?.message?.content ?? response?.choices?.[0]?.text ?? "";
-        console.log("Raw model response for title enhancement:", content);
-        return JSON5.parse(content);
+  async enhance_alt_text() {
+    if (!this.images || this.images.length === 0) {
+      console.log("[enhance_alt_text] No images, skipping.");
+      return [];
     }
+    const image_info = normalizeImages(this.images);
+    const prompt = ALT_TEXT_PROMPT(this.product.title, this.rules, image_info);
+    const response = await this.ai.chatCompletion({
+      model: process.env.GPT_MODEL,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const content = response?.choices?.[0]?.message?.content ?? "";
+    console.log(`input:${response.usage?.prompt_tokens} | output:${response.usage?.completion_tokens} | total:${response.usage?.total_tokens}`);
+    return JSON5.parse(content);
+  }
 
-    async enhance_meta_description(){
-const prompt = META_DESC_PROMPT(this.product.title,this.rules,this.product.id);
-        const response = await this.client.chat.completions.create({
-            model: "gpt-4",
-            temperature: 0.2,
-            messages: [
-                
-                { role: "user", content: prompt },
-            ],
-        });
-        console.log('RAW',response)
-        const content =
-            response?.choices?.[0]?.message?.content ?? response?.choices?.[0]?.text ?? "";
-        console.log("Raw model response for title enhancement:", content);
-        return JSON5.parse(content);
-    }
+  async enhance_meta_description() {
+    const prompt = META_DESC_PROMPT(this.product.title, this.rules, this.product.id);
+    const response = await this.ai.chatCompletion({
+      model: process.env.GPT_MODEL,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const content = response?.choices?.[0]?.message?.content ?? "";
+    console.log("[enhance_meta_description] raw:", content);
+    return JSON5.parse(content);
+  }
 }
 
 
@@ -220,7 +196,7 @@ export async function classifyImages({ client, images }) {
     }
 
     const response = await client.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: process.env.GPT_MODEL,
         temperature: 0.2,
         messages: [
             { role: "system", content: "You are an expert product image classifier." },

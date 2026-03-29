@@ -1,54 +1,47 @@
-import {OpenAuthInit} from '../app/auth.js';
-
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 class RetrySafeOpenAI {
-	constructor({ client } = {}) {
-		if (client) {
-			this.client = client;
-		} else {
-			// Try to load a client factory if present at ../base/auth
-			try {
-				const authModule = OpenAuthInit()
-				if (authModule && typeof authModule.OpenAiAuthInit === 'function') {
-					this.client = authModule.clientAuth();
-				} else if (
-					authModule &&
-					authModule.OpenAiAuthInit &&
-					typeof authModule.OpenAiAuthInit.clientAuth === 'function'
-				) {
-					this.client = authModule.OpenAiAuthInit.clientAuth();
-				}
-			} catch (err) {
-				// If the module isn't present, leave client undefined and
-				// require the caller to pass a `client` in the constructor.
-			}
-		}
-	}
+  constructor({ client }) {
+    this.client = client;
+  }
 
-	async chatCompletion({ model, messages, maxRetries = 5 }) {
-		let attempt = 0;
+  async chatCompletion({ model, messages, temperature = 0.2, maxRetries = 5 }) {
+    let attempt = 0;
 
-		while (true) {
-			try {
-				if (!this.client) {
-					throw new Error(
-						'OpenAI client not initialized. Pass `client` to constructor or provide ../base/auth OpenAiAuthInit.'
-					);
-				}
+    while (true) {
+      try {
+        return await this.client.chat.completions.create({
+          model,
+          temperature,
+          messages,
+        });
+      } catch (e) {
+        const isRateLimit = e?.status === 429 || e?.code === 'rate_limit_exceeded';
+        const isServerError = e?.status >= 500;
 
-				return await this.client.chat.completions.create({ model, messages });
-			} catch (e) {
-				console.warn(`OpenAI API error: ${e}. Retrying...`);
-				attempt += 1;
-				if (attempt > maxRetries) throw e;
+        // Only retry on rate limits and server errors — fail fast on auth/bad request
+        if (!isRateLimit && !isServerError) {
+          console.error(`[OpenAI] Non-retryable error: ${e.message}`);
+          throw e;
+        }
 
-				// exponential backoff with jitter (seconds)
-				const sleepTimeSec = Math.min(2 ** attempt, 30) + Math.random();
-				await sleep(Math.floor(sleepTimeSec * 1000));
-			}
-		}
-	}
+        attempt += 1;
+        if (attempt > maxRetries) {
+          console.error(`[OpenAI] Max retries (${maxRetries}) exceeded`);
+          throw e;
+        }
+
+        // Read Retry-After header if present, otherwise exponential backoff
+        const retryAfter = e?.headers?.['retry-after'];
+        const waitMs = retryAfter
+          ? parseInt(retryAfter) * 1000
+          : Math.min(2 ** attempt * 1000, 30000) + Math.random() * 1000;
+
+        console.warn(`[OpenAI] Rate limited. Attempt ${attempt}/${maxRetries}. Waiting ${Math.round(waitMs / 1000)}s...`);
+        await sleep(waitMs);
+      }
+    }
+  }
 }
 
-module.exports = { RetrySafeOpenAI };
+export { RetrySafeOpenAI };

@@ -4,6 +4,7 @@ import { Modal, TitleBar } from "@shopify/app-bridge-react";
 import OptimizeProductModal from "../components/modals/optimizationModal"
 import ProductUpdateModal from "../components/modals/productUpdateModal"
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { getOrCreateSubscription } from "../models/Subscription.server";
 import { authenticate } from "../shopify.server";
 import ProductReviewDrawer from "../components/ProductReviewDrawer";
 import {getBusinessRuleset,createBusinessRuleset} from "../models/BusinessRuleset.server";
@@ -17,20 +18,34 @@ export const loader = async ({ request }) => {
 
   const businessRuleset = await getBusinessRuleset(session.shop);
   const optimizationJobs = await fetchOptimizationJobs({shop:session.shop})
+  const subscription = await getOrCreateSubscription(session.shop)
+  const limit = subscription.plan.monthlyOptimizationLimit;
+  const used = subscription.optimizationsUsedThisCycle;
+  const canOptimize = limit === -1 || used < limit;
+  // Pagination: read page from query params, default 1
+  const url = new URL(request.url);
+  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
+  const perPage = 20;
+  const skip = (page - 1) * perPage;
+
+  const totalProducts = await prisma.product.count({ where: { shop: session.shop } });
+
   const products = await prisma.product.findMany({
-  where: { shop: session.shop },
-  include: {
-    optimizations: {
-      orderBy: { createdAt: "desc" },
-      take: 1,
+    where: { shop: session.shop },
+    include: {
+      optimizations: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+      analyses: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+      media: true,
     },
-    analyses: {
-      orderBy: { createdAt: "desc" },
-      take: 1,
-    },
-    media: true,
-  },
-});
+    skip,
+    take: perPage,
+  });
   // Transform into UI-friendly format
   const formattedProducts = products.map((product) => {
     const latestAnalysis = product?.analyses[0] ?? null;
@@ -52,19 +67,21 @@ export const loader = async ({ request }) => {
     };
   });
 
-  const totalProducts = formattedProducts.length;
+  const displayedCount = formattedProducts.length;
 
   const optimizedProducts = 0
 
   const avgScore =
-    totalProducts > 0
+    displayedCount > 0
       ? (
           formattedProducts.reduce(
             (sum, p) => sum + p.score,
             0
-          ) / totalProducts
+          ) / displayedCount
         ).toFixed(1)
       : 0;
+
+  const totalPages = Math.max(1, Math.ceil(totalProducts / perPage));
 
   return {
     hasBusinessRuleset: !!businessRuleset,
@@ -72,7 +89,14 @@ export const loader = async ({ request }) => {
     products: formattedProducts,
     optimizationJobs,
     totalProducts,
+    page,
+    perPage,
+    totalPages,
     optimizedProducts,
+      canOptimize,
+      optimizationsUsed: used,
+    optimizationsLimit: limit,
+    planName: subscription,
     avgScore,
   };
 };
@@ -172,6 +196,12 @@ export default function Index() {
   optimizationJobs,
   optimizedProducts,
   avgScore,
+  canOptimize,       
+  optimizationsUsed,   
+  optimizationsLimit,  
+  planName,
+  page,
+  totalPages,
 } = useLoaderData();
 
   const navigate = useNavigate();
@@ -190,7 +220,8 @@ useEffect(() => {
   }
 }, [fetcher.state]);
 
-
+  console.log('LIMIT',planName)
+  console.log('CANAN',canOptimize)
 const hasRunningJob = products.some(
   (p) => p.optimizationStatus === "processing" ||
          p.optimizationStatus === "queued"
@@ -468,6 +499,40 @@ return (
       {hasBusinessRuleset && businessRuleset?.productScan === true && (
         <s-section padding="none" accessibilityLabel="Puzzles table section">
         <s-section>
+          {!canOptimize && (
+      <s-section>
+        <s-box padding="base" border="base" borderRadius="base" background="critical-subdued">
+          <s-stack direction="inline" alignItems="center" justifyContent="space-between">
+            <s-stack direction="block" gap="small">
+              <s-text tone="critical">
+                You have used all {optimizationsLimit} optimizations for this billing cycle.
+              </s-text>
+              <s-text tone="subdued">
+                Upgrade your plan to continue optimizing products.
+              </s-text>
+            </s-stack>
+            <s-button variant="primary" onClick={() => navigate("/app/plans")}>
+              Upgrade Plan
+            </s-button>
+          </s-stack>
+        </s-box>
+      </s-section>
+    )}
+    {canOptimize && optimizationsLimit !== -1 && optimizationsUsed >= optimizationsLimit * 0.8 && (
+      <s-section>
+        <s-box padding="base" border="base" borderRadius="base" background="warning-subdued">
+          <s-stack direction="inline" alignItems="center" justifyContent="space-between">
+            <s-text tone="warning">
+              {optimizationsUsed} of {optimizationsLimit} optimizations used this cycle.
+            </s-text>
+            <s-button variant="secondary" onClick={() => navigate("/app/plans")}>
+              View Plans
+            </s-button>
+          </s-stack>
+        </s-box>
+      </s-section>
+    )}
+    
     <s-box
       padding="base"
       border="base"
@@ -574,12 +639,8 @@ return (
       onClick={() => {
         setSelectedProductId(product.shopifyProductId);
         setShowReviewDrawer(true);
-
         reviewFetcher.submit(
-          {
-            intent: "loadReview",
-            productId: product.id,
-          },
+          { intent: "loadReview", productId: product.id },
           { method: "post" }
         );
       }}
@@ -589,6 +650,7 @@ return (
   ) : product.optimizationStatus === "failed" ? (
     <s-button
       tone="critical"
+      disabled={!canOptimize}  // ← disable retry if out of quota
       onClick={() => {
         setSelectedProductId(product.id);
         setShowModal(true);
@@ -599,12 +661,14 @@ return (
   ) : (
     <s-button
       variant="primary"
+      disabled={!canOptimize}  // ← disable optimize if out of quota
       onClick={() => {
+        if (!canOptimize) return;
         setSelectedProductId(product.id);
         setShowModal(true);
       }}
     >
-      Optimize
+      {canOptimize ? "Optimize" : "Limit Reached"}
     </s-button>
   )}
 </s-table-cell>
@@ -631,6 +695,29 @@ return (
   onReject={handleReject}
 />
       </s-table>
+            {totalPages > 1 && (
+              <s-section padding="base">
+                <s-stack direction="inline" justifyContent="center" gap="small">
+                  <s-button
+                    disabled={page <= 1}
+                    onClick={() => navigate(`?page=${page - 1}`)}
+                  >
+                    Previous
+                  </s-button>
+
+                  <s-text>
+                    Page {page} of {totalPages}
+                  </s-text>
+
+                  <s-button
+                    disabled={page >= totalPages}
+                    onClick={() => navigate(`?page=${page + 1}`)}
+                  >
+                    Next
+                  </s-button>
+                </s-stack>
+              </s-section>
+            )}
       <Modal
     open={rulesModalOpen}
     onClose={() => setRulesModalOpen(false)}
