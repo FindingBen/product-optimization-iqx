@@ -101,12 +101,12 @@ const handleAutomationToggle = (checked) => {
   {businessRuleset ? (
     <>
       <BusinessRulesetComponent businessData={businessRuleset}/>
-      <fetcher.Form method="post" style={{ marginTop: '1rem' }}>
+      {/* <fetcher.Form method="post" style={{ marginTop: '1rem' }}>
         <input type="hidden" name="intent" value="deleteRuleset" />
         <s-button tone="critical" variant="secondary" type="submit">
           Delete ruleset
         </s-button>
-      </fetcher.Form>
+      </fetcher.Form> */}
     </>
   ) : (
     <s-box padding="base" background="subdued" borderRadius="medium">

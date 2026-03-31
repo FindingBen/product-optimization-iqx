@@ -1,6 +1,6 @@
 // app/routes/webhooks.app-subscriptions-update.jsx
 import { authenticate } from "../shopify.server";
-import { activateSubscription, downgradeToFree } from "../models/Subscription.server";
+import { activateSubscription } from "../models/Subscription.server";
 import prisma from "../db.server";
 
 export const action = async ({ request }) => {
@@ -20,8 +20,7 @@ export const action = async ({ request }) => {
 
   console.log(`[webhook] incoming id: ${shopifySubscriptionId} | stored id: ${storedSub?.shopifySubscriptionId}`);
 
-  // Ignore webhooks for old/previous subscription IDs
-  // Exception: ACTIVE events should always be processed (new subscription activating)
+  
   if (
     status !== "ACTIVE" &&
     storedSub?.shopifySubscriptionId &&
@@ -32,42 +31,47 @@ export const action = async ({ request }) => {
   }
 
   switch (status) {
-    case "ACTIVE":
+    case "ACTIVE": {
       await activateSubscription(shop, shopifySubscriptionId);
-      console.log(`[webhook] Subscription activated → ${shop}`);
-      break;
 
-    case "CANCELLED":
-    case "DECLINED":
-    case "EXPIRED": {
-      // Re-fetch to get latest nextPlanName (may have changed since initial fetch)
-      const currentSub = await prisma.shopSubscription.findUnique({
-        where: { shop },
-      });
+  console.log(`[webhook] Activated → ${sub.nextPlanName}`);
+  break;
+}
 
-      if (currentSub?.nextPlanName) {
-        // Scheduled downgrade — the cycle ended, apply the queued plan change
-        await prisma.shopSubscription.update({
-          where: { shop },
-          data: {
-            planName: currentSub.nextPlanName,
-            nextPlanName: null,
-            status: "active",
-            shopifySubscriptionId: null,
-            shopifyConfirmationUrl: null,
-            optimizationsUsedThisCycle: 0,
-            billingCycleStart: new Date(),
-            billingCycleEnd: null,
-          },
-        });
-        console.log(`[webhook] Scheduled downgrade applied → ${shop} now on ${currentSub.nextPlanName}`);
-      } else {
-        // No scheduled change — genuine cancellation/expiry, drop to free
-        await downgradeToFree(shop);
-        console.log(`[webhook] Subscription ended (${status}) → ${shop} downgraded to free`);
-      }
-      break;
+    case "CANCELLED":{
+      return new Response(null, { status: 200 });
     }
+    case "DECLINED":
+      return new Response(null, { status: 200 });
+    // case "EXPIRED": {
+    //   // Re-fetch to get latest nextPlanName (may have changed since initial fetch)
+    //   const currentSub = await prisma.shopSubscription.findUnique({
+    //     where: { shop },
+    //   });
+
+    //   if (currentSub?.nextPlanName) {
+    //     // Scheduled downgrade — the cycle ended, apply the queued plan change
+    //     await prisma.shopSubscription.update({
+    //       where: { shop },
+    //       data: {
+    //         planName: currentSub.nextPlanName,
+    //         nextPlanName: null,
+    //         status: "active",
+    //         shopifySubscriptionId: null,
+    //         shopifyConfirmationUrl: null,
+    //         optimizationsUsedThisCycle: 0,
+    //         billingCycleStart: new Date(),
+    //         billingCycleEnd: null,
+    //       },
+    //     });
+    //     console.log(`[webhook] Scheduled downgrade applied → ${shop} now on ${currentSub.nextPlanName}`);
+    //   } else {
+    //     // No scheduled change — genuine cancellation/expiry, drop to free
+    //     await downgradeToFree(shop);
+    //     console.log(`[webhook] Subscription ended (${status}) → ${shop} downgraded to free`);
+    //   }
+    //   break;
+    // }
 
     case "FROZEN":
       await prisma.shopSubscription.update({

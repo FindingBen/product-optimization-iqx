@@ -70,6 +70,10 @@ query {
     email
     myshopifyDomain
     description
+    plan {
+        displayName
+        partnerDevelopment
+      }
     primaryDomain {
       url
       host

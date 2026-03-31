@@ -58,10 +58,9 @@ export async function createBusinessRuleset({ shop, ...data }) {
   });
 }
 
+
 export async function updateBusinessRuleset({ shop, ...raw }) {
   const data = {};
-
-  console.log('RAW DATA IN UPDATE', raw);
 
   // List of boolean fields in your schema
   const booleanFields = [

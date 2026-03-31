@@ -94,9 +94,9 @@ export async function createShopifySubscription(admin, shop, planName) {
   if (!plan || plan.price === 0) throw new Error("Invalid paid plan");
 
   const returnUrl = buildAdminEmbeddedReturnUrl(
-    shop,
-    "/app/plans/confirm" // this should be the in-app route you want
-  );
+  shop,
+  `/app/plans/confirm?plan=${planName}`
+);
 
   const response = await admin.graphql(SUBSCRIPTION_CHARGE, {
     variables: {
@@ -147,17 +147,13 @@ export async function activateSubscription(shop, shopifySubscriptionId) {
   await prisma.shopSubscription.update({
     where: { shop },
     data: {
+      planName: sub.nextPlanName,   // ✅ move it here
+      nextPlanName: nextPlan,
       status: "active",
       shopifySubscriptionId,
-
-      // ✅ apply scheduled plan
-      planName: nextPlan,
-      nextPlanName: null,
-
-      billingCycleStart: now,
-      billingCycleEnd: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
-
       optimizationsUsedThisCycle: 0,
+      billingCycleStart: new Date(),
+      billingCycleEnd: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000), // 30 days
     },
   });
 }

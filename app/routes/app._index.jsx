@@ -7,15 +7,15 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { getOrCreateSubscription } from "../models/Subscription.server";
 import { authenticate } from "../shopify.server";
 import ProductReviewDrawer from "../components/ProductReviewDrawer";
-import {getBusinessRuleset,createBusinessRuleset} from "../models/BusinessRuleset.server";
+import {getBusinessRuleset,createBusinessRuleset,getShopInfo} from "../models/BusinessRuleset.server";
 import {scanProducts,deleteProducts,handleUpdateProductShopify} from "../models/Products.server";
 import {enqueueOptimization} from "../models/Automation.server"
 import {fetchOptimizationJobs,handleReject,handleApprove} from "../models/Optimization.server"
 import prisma from "../db.server";
 
 export const loader = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
-
+  const { session,admin } = await authenticate.admin(request);
+  const shopInfo = await getShopInfo(admin);
   const businessRuleset = await getBusinessRuleset(session.shop);
   const optimizationJobs = await fetchOptimizationJobs({shop:session.shop})
   const subscription = await getOrCreateSubscription(session.shop)
@@ -92,6 +92,7 @@ export const loader = async ({ request }) => {
     page,
     perPage,
     totalPages,
+    shopInfo:shopInfo,
     optimizedProducts,
       canOptimize,
       optimizationsUsed: used,
@@ -194,8 +195,7 @@ export default function Index() {
   products,
   totalProducts,
   optimizationJobs,
-  optimizedProducts,
-  avgScore,
+  shopInfo,
   canOptimize,       
   optimizationsUsed,   
   optimizationsLimit,  
@@ -213,7 +213,7 @@ useEffect(() => {
   }
 }, [fetcher.state, fetcher.data]);
 
-
+  console.log('SHOPPPPPPP',shopInfo)
 useEffect(() => {
   if (fetcher.state === "idle" && optimizingId) {
     setOptimizingId(null);

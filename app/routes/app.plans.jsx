@@ -1,20 +1,26 @@
-import { useLoaderData, useFetcher } from "react-router";
+import { useLoaderData, useFetcher,useRevalidator } from "react-router";
+import { useEffect } from "react";
 import { authenticate } from "../shopify.server";
 import {
   cancelSubscription,
   getOrCreateSubscription,
   createShopifySubscription,
 } from "../models/Subscription.server";
+import { getShopInfo } from "../models/BusinessRuleset.server";
 import prisma from "../db.server";
 
 export const loader = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+  const { session,admin } = await authenticate.admin(request);
   const shop = session.shop;
-
-  const subscription = await getOrCreateSubscription(shop);
+  const shopInfo = await getShopInfo(admin);
+  const isDevStore = shopInfo?.shop?.plan?.partnerDevelopment === true;
+  const subscription = await prisma.shopSubscription.findUnique({
+  where: { shop },
+  include: { plan: true },
+});
   const plans = await prisma.plan.findMany({ orderBy: { price: "asc" } });
 
-  return { subscription, plans };
+  return { subscription, plans,isDevStore };
 };
 
 export const action = async ({ request }) => {
@@ -28,6 +34,11 @@ export const action = async ({ request }) => {
     return { success: true };
   }
 
+  const shopInfo = await getShopInfo(admin);
+  const isDevStore = shopInfo?.plan?.partnerDevelopment === true;
+  if (isDevStore) {
+    return { error: "Billing is disabled for development stores" };
+  }
   // Determine if this is an upgrade or downgrade
   const sub = await getOrCreateSubscription(session.shop);
   const currentPlan = await prisma.plan.findUnique({ where: { name: sub.planName } });
@@ -90,17 +101,19 @@ function CheckIcon() {
   );
 }
 
-function PlanCard({ plan, currentPlanName, onUpgrade, isLoading }) {
+function PlanCard({ plan, currentPlanName, onUpgrade, isLoading,isDevStore  }) {
   const features = PLAN_FEATURES[plan.name] ?? [];
   const meta = PLAN_META[plan.name] ?? PLAN_META.free;
   const isCurrent = plan.name === currentPlanName;
-  const isDowngrade = plan.price < (PLAN_META[currentPlanName]?.price ?? 0);
   const isPro = plan.name === "ProductIQX Pro";
 
   return (
     <div style={{
       position: "relative",
       borderRadius: 16,
+      opacity: isDevStore ? 0.5 : 1,
+      pointerEvents: isDevStore ? "none" : "auto",
+      filter: isDevStore ? "grayscale(100%)" : "none",
       border: isCurrent
         ? `2px solid ${meta.accent}`
         : isPro
@@ -247,7 +260,7 @@ function PlanCard({ plan, currentPlanName, onUpgrade, isLoading }) {
       ) : (
         <button
           onClick={() => onUpgrade(plan.name)}
-          disabled={isLoading}
+          disabled={isLoading || isDevStore}
           style={{
             width: "100%",
             padding: "11px 0",
@@ -302,26 +315,27 @@ function formatDateTime(dateInput) {
 }
 
 export default function PlansPage() {
-  const { subscription, plans } = useLoaderData();
+  const { subscription, plans,isDevStore  } = useLoaderData();
   const fetcher = useFetcher();
-  const startDate = new Date(subscription.billingCycleEnd)
   const isLoading = fetcher.state !== "idle";
+  const revalidator = useRevalidator();
 
   const handleUpgrade = (planName) => {
     fetcher.submit({ planName }, { method: "post" });
   };
-
+  console.log('AAAAAAA',isDevStore)
   // Redirect to Shopify confirmation URL if returned
   if (fetcher.data?.confirmationUrl) {
     window.top.location.href = fetcher.data.confirmationUrl;
   }
 
   const currentPlan = subscription?.plan;
-  console.log(currentPlan?.name)
+  console.log("Current subscription:", subscription);
+  useEffect(() => {
+  revalidator.revalidate();
+}, []);
   return (
     <s-page heading="Plans & Billing">
-
-      {/* Current plan banner */}
       <s-section>
         <s-card>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
@@ -345,9 +359,11 @@ export default function PlansPage() {
                   {subscription?.status ?? "active"}
                 </span>
               </div>
+              
             </div>
 
             <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+              
               <div style={{ textAlign: "center" }}>
                 <div style={{ fontSize: 20, fontWeight: 800, color: "#1a1a1a" }}>
                   {subscription?.optimizationsUsedThisCycle ?? 0}
@@ -384,6 +400,19 @@ export default function PlansPage() {
                 </div>
               )}
             </div>
+            {isDevStore && (
+  <div style={{
+    background: "#fff4e5",
+    border: "1px solid #ffd79d",
+    padding: "12px",
+    borderRadius: 8,
+    marginBottom: 16,
+    fontSize: 13,
+    color: "#8a6116"
+  }}>
+    Billing is disabled for development stores. Upgrade your store to a paid Shopify plan to enable subscriptions.
+  </div>
+)}
           </div>
         </s-card>
       </s-section>
@@ -404,6 +433,7 @@ export default function PlansPage() {
               currentPlanName={subscription?.planName ?? "free"}
               onUpgrade={handleUpgrade}
               isLoading={isLoading}
+              isDevStore={isDevStore}
             />
           ))}
         </div>
