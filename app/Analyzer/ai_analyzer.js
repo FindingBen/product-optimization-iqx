@@ -76,7 +76,7 @@ class ProductEnhancement {
     });
     const content = response?.choices?.[0]?.message?.content ?? "";
     console.log(`input:${response.usage?.prompt_tokens} | output:${response.usage?.completion_tokens} | total:${response.usage?.total_tokens}`);
-    return JSON5.parse(content);
+    return tryParseJSON(content);
   }
 
   async enhance_description() {
@@ -88,7 +88,7 @@ class ProductEnhancement {
     const content = response?.choices?.[0]?.message?.content ?? "";
     console.log(`input:${response.usage?.prompt_tokens} | output:${response.usage?.completion_tokens} | total:${response.usage?.total_tokens}`);
   
-    return JSON5.parse(content);
+    return tryParseJSON(content);
   }
 
   async enhance_alt_text() {
@@ -104,7 +104,7 @@ class ProductEnhancement {
     });
     const content = response?.choices?.[0]?.message?.content ?? "";
     console.log(`input:${response.usage?.prompt_tokens} | output:${response.usage?.completion_tokens} | total:${response.usage?.total_tokens}`);
-    return JSON5.parse(content);
+    return tryParseJSON(content);
   }
 
   async enhance_meta_description() {
@@ -115,7 +115,7 @@ class ProductEnhancement {
     });
     const content = response?.choices?.[0]?.message?.content ?? "";
     console.log("[enhance_meta_description] raw:", content);
-    return JSON5.parse(content);
+    return tryParseJSON(content);
   }
 }
 
@@ -213,4 +213,33 @@ export async function classifyImages({ client, images }) {
         console.error("FAILED TO PARSE JSON:", raw);
         throw err;
     }
+}
+
+
+// Shared utility — put this at the top of ai_analyzer.js or a utils file
+function tryParseJSON(text) {
+  try {
+    return JSON5.parse(text);
+  } catch (err) {
+    // Strip markdown code fences: ```json ... ``` or ``` ... ```
+    const fence = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (fence?.[1]) return JSON5.parse(fence[1]);
+
+    // Try extracting a JSON object
+    const firstBrace = text.indexOf("{");
+    const lastBrace = text.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace)
+      return JSON5.parse(text.slice(firstBrace, lastBrace + 1));
+
+    // Try extracting a JSON array
+    const firstBracket = text.indexOf("[");
+    const lastBracket = text.lastIndexOf("]");
+    if (firstBracket !== -1 && lastBracket > firstBracket)
+      return JSON5.parse(text.slice(firstBracket, lastBracket + 1));
+
+    const snippet = text?.slice(0, 300) ?? "<empty>";
+    const e = new Error(`Failed to parse model response: ${err.message}. Snippet: ${snippet}`);
+    e.cause = err;
+    throw e;
+  }
 }

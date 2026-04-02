@@ -1,6 +1,6 @@
 import { data } from "@remix-run/node";
 import prisma from "../db.server";
-import {optimizationQueue} from "../Queue/optimizationQueue"
+import {optimizationQueue} from "../Queue/optimizationQueue.server"
 
 
 export async function getAutomationSettings(session) {
