@@ -19,8 +19,8 @@ export const loader = async ({ request }) => {
   const businessRuleset = await getBusinessRuleset(session.shop);
   const optimizationJobs = await fetchOptimizationJobs({shop:session.shop})
   const subscription = await getOrCreateSubscription(session.shop)
-  const limit = subscription.plan.monthlyOptimizationLimit;
-  const used = subscription.optimizationsUsedThisCycle;
+  const limit = subscription.plan?.monthlyOptimizationLimit ?? 20;
+  const used = subscription.optimizationsUsedThisCycle ?? 0;
   const canOptimize = limit === -1 || used < limit;
   // Pagination: read page from query params, default 1
   const url = new URL(request.url);

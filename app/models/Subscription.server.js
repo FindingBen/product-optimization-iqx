@@ -3,24 +3,21 @@ import { SUBSCRIPTION_CHARGE } from "../Queries/queries"
 
 // Called on every app load — ensures every store has a subscription row
 export async function getOrCreateSubscription(shop) {
-  return prisma.shopSubscription.upsert({
+  const existing = await prisma.shopSubscription.findUnique({
     where: { shop },
-    update: {},
-    create: {
+    include: { plan: true },
+  });
+
+  if (existing) return existing;
+
+  return await prisma.shopSubscription.create({
+    data: {
       shop,
-      planName: "free",
+      planName: "Free",  // must exactly match the Plan.name you seeded
       status: "active",
       billingCycleStart: new Date(),
     },
-    select: {
-    shop: true,
-    planName: true,
-    nextPlanName: true,
-    billingCycleStart: true,
-    optimizationsUsedThisCycle: true,
-    billingCycleEnd: true,
-    plan: true,
-  },
+    include: { plan: true },
   });
 }
 
