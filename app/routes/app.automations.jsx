@@ -12,7 +12,7 @@ export const loader = async ({ request }) => {
   const automationSettings = await getAutomationSettings(session);
   const automations = await loadAutomations(session);
   const subscription = await getOrCreateSubscription(session.shop);
-  if (!subscription || subscription.planName === "free") {
+  if (!subscription || subscription.planName === "Free") {
     throw redirect("/app/plans");
   }
  const allRuns = automations.flatMap((a) => a.runs);
@@ -85,25 +85,7 @@ export default function AutomationPage() {
     }
   }, [fetcher.state, fetcher.data]);
 
-  if (!automationSettings) {
-    return (
-      <s-page heading="Automations">
-        <s-section>
-          <s-card>
-            <s-stack direction="block" alignment="center" gap="loose">
-              <s-heading>You must enable automations first</s-heading>
-              <s-text tone="subdued">
-                Go to settings and enable automations before creating automation rules.
-              </s-text>
-              <s-button variant="primary" onClick={() => navigate("/app/settings")}>
-                Go to Settings
-              </s-button>
-            </s-stack>
-          </s-card>
-        </s-section>
-      </s-page>
-    );
-  }
+
 
   return (
     <s-page heading="Automations">

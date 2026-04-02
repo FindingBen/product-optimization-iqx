@@ -8,8 +8,8 @@ export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
   const runs = await loadAutomationRuns(session);
   const subscription = await getOrCreateSubscription(session.shop);
-  if (!subscription || subscription.planName === "free") {
-    console.log('PLAN',subscription)
+  if (!subscription || subscription.planName === "Free") {
+
     throw redirect("/app/plans");
   }
   return { runs,subscription };
@@ -18,7 +18,7 @@ export const loader = async ({ request }) => {
 export default function AutomationRunsPage() {
   const { runs, subscription } = useLoaderData();
 
-  console.log('PLAN',subscription)
+
   return (
     <s-page heading="Automation Runs">
       <AutomationRunsTable runs={runs} />
