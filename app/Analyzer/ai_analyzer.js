@@ -75,7 +75,7 @@ class ProductEnhancement {
       messages: [{ role: "user", content: prompt }],
     });
     const content = response?.choices?.[0]?.message?.content ?? "";
-    console.log(`input:${response.usage?.prompt_tokens} | output:${response.usage?.completion_tokens} | total:${response.usage?.total_tokens}`);
+   
     return tryParseJSON(content);
   }
 
@@ -86,7 +86,6 @@ class ProductEnhancement {
       messages: [{ role: "user", content: prompt }],
     });
     const content = response?.choices?.[0]?.message?.content ?? "";
-    console.log(`input:${response.usage?.prompt_tokens} | output:${response.usage?.completion_tokens} | total:${response.usage?.total_tokens}`);
   
     return tryParseJSON(content);
   }
@@ -103,7 +102,7 @@ class ProductEnhancement {
       messages: [{ role: "user", content: prompt }],
     });
     const content = response?.choices?.[0]?.message?.content ?? "";
-    console.log(`input:${response.usage?.prompt_tokens} | output:${response.usage?.completion_tokens} | total:${response.usage?.total_tokens}`);
+    
     return tryParseJSON(content);
   }
 
@@ -114,7 +113,7 @@ class ProductEnhancement {
       messages: [{ role: "user", content: prompt }],
     });
     const content = response?.choices?.[0]?.message?.content ?? "";
-    console.log("[enhance_meta_description] raw:", content);
+
     return tryParseJSON(content);
   }
 }

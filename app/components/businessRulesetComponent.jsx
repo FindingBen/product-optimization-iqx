@@ -12,8 +12,6 @@ const BusinessRulesetComponent = ({ businessData, onSave }) => {
 
   if (!businessData) return null;
 
-  console.log("BusinessRulesetComponent rendered with data:", form);
-
 
   return (
     <s-stack gap="large">

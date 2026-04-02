@@ -91,17 +91,22 @@ await prisma.$transaction(async (tx) => {
       ...updateData,
     },
   });
-
+console.log('ENHANCED ALT', images);
   // Only create alt text if it exists
-  if (enhanced_alt && enhanced_alt.length > 0) {
+if (enhanced_alt && enhanced_alt.length > 0) {
   await tx.productMediaContext.createMany({
     data: enhanced_alt.map((img) => {
-      const original = images.find((i) => i.id === img.id);
+      // Match by shopifyMediaId, not prisma id
+      const original = images.find(
+        (i) => i.shopifyMediaId === img.id  // ← was i.id === img.id
+      );
+
+      console.log(`[alt] img.id:${img.id} → found original:`, original?.url ?? "NOT FOUND");
 
       return {
         productId: productContext.id,
-        shopifyMediaId: img.id, // <-- ADD THIS
-        url: original?.url ?? "https://placehold.it/300x300",
+        shopifyMediaId: img.id,
+        url: original?.url ?? null,  // ← null instead of placeholder so you know it's missing
         altText: img.alt,
       };
     }),
@@ -145,7 +150,9 @@ if (enhanced_description) {
 
 if (enhanced_alt?.length > 0) {
   enhanced_alt.forEach((img) => {
-    const original = images.find((i) => i.id === img.id);
+    const original = images.find(
+      (i) => i.shopifyMediaId === img.id  // ← same fix here
+    );
     results.push({
       type: "ALT_TEXT",
       originalValue: original?.altText ?? null,

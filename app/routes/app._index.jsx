@@ -213,15 +213,13 @@ useEffect(() => {
   }
 }, [fetcher.state, fetcher.data]);
 
-  console.log('SHOPPPPPPP',shopInfo)
+
 useEffect(() => {
   if (fetcher.state === "idle" && optimizingId) {
     setOptimizingId(null);
   }
 }, [fetcher.state]);
 
-  console.log('LIMIT',planName)
-  console.log('CANAN',canOptimize)
 const hasRunningJob = products.some(
   (p) => p.optimizationStatus === "processing" ||
          p.optimizationStatus === "queued"
@@ -285,7 +283,7 @@ const handleUpdateProduct = (productId) =>{
     {method:"post"}
   )
 }
-console.log('PPPPPP',selectedProductId)
+
 const handleCloseDrawer = useCallback(() => {
   setShowReviewDrawer(false);
   setSelectedProductId(null);
