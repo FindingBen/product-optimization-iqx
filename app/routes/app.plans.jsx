@@ -13,7 +13,7 @@ export const loader = async ({ request }) => {
   const { session,admin } = await authenticate.admin(request);
   const shop = session.shop;
   const shopInfo = await getShopInfo(admin);
-  const isDevStore = shopInfo?.shop?.plan?.partnerDevelopment === true;
+  const isDevStore = shopInfo?.shop?.plan?.partnerDevelopment === false;
   const subscription = await prisma.shopSubscription.findUnique({
   where: { shop },
   include: { plan: true },
@@ -26,6 +26,7 @@ export const loader = async ({ request }) => {
 export const action = async ({ request }) => {
   const { session, admin } = await authenticate.admin(request);
   const formData = await request.formData();
+
   const intent = formData.get("intent");
   const planName = formData.get("planName");
 
@@ -36,9 +37,9 @@ export const action = async ({ request }) => {
 
   const shopInfo = await getShopInfo(admin);
   const isDevStore = shopInfo?.plan?.partnerDevelopment === true;
-  if (isDevStore) {
-    return { error: "Billing is disabled for development stores" };
-  }
+  // if (isDevStore) {
+  //   return { error: "Billing is disabled for development stores" };
+  // }
   // Determine if this is an upgrade or downgrade
   const sub = await getOrCreateSubscription(session.shop);
   const currentPlan = await prisma.plan.findUnique({ where: { name: sub.planName } });
@@ -61,28 +62,29 @@ export const action = async ({ request }) => {
 };
 
 const PLAN_FEATURES = {
-  free: [
-    "50 optimizations / month",
+  Free: [
+    "20 optimizations / month",
     "Title, description & alt text",
     "SEO scoring",
     "Manual optimize only",
+    "100 products"
   ],
-  "ProductIQX Starter": [
+  "Iqx Starter": [
     "500 optimizations / month",
     "Title, description & alt text",
     "SEO scoring",
-    "Up to 3 automation rules",
+    "Up to 5 automation rules",
     "New product auto-optimize",
-    "Priority queue",
+    "250 products"
   ],
-  "ProductIQX Pro": [
-    "Unlimited optimizations",
+  "Iqx Pro": [
+    "2500 optimizations",
     "Title, description & alt text",
     "SEO scoring",
-    "Unlimited automation rules",
+    "20",
     "New product auto-optimize",
     "Priority queue",
-    "Bulk optimization",
+   "500 products"
   ],
 };
 
@@ -430,7 +432,7 @@ export default function PlansPage() {
             <PlanCard
               key={plan.id}
               plan={plan}
-              currentPlanName={subscription?.planName ?? "free"}
+              currentPlanName={subscription?.planName ?? "Free"}
               onUpgrade={handleUpgrade}
               isLoading={isLoading}
               isDevStore={isDevStore}
