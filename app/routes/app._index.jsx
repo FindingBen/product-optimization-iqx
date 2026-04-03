@@ -404,9 +404,7 @@ return (
         </s-stack>
       </Modal>
     )}
-      <s-button slot="primary-action">Create puzzle</s-button>
-      <s-button slot="secondary-actions">Browse templates</s-button>
-      <s-button slot="secondary-actions">Import image</s-button>
+      
     
       <s-section padding="base">
         <s-grid
@@ -537,7 +535,7 @@ return (
       borderRadius="base"
       background="critical-subdued"
     >
-      <s-stack direction="inline" alignItems="center" justifyContent="space-between">
+      {/* <s-stack direction="inline" alignItems="center" justifyContent="space-between">
         <s-text tone="critical">Business rules configured</s-text>
 
         <fetcher.Form method="post">
@@ -552,7 +550,7 @@ return (
         </s-button>
       </fetcher.Form>
 
-      </s-stack>
+      </s-stack> */}
     </s-box>
   </s-section>
         <s-table style={{ opacity: isDeleting ? 0.5 : 1 }}>

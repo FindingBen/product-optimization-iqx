@@ -134,10 +134,10 @@ model Plan {
   name        String   @unique
   price       Float    @default(0.0)
 
-  monthlyOptimizationLimit  Int      @default(50)
+  monthlyOptimizationLimit  Int      @default(20)
   automationsAllowed        Boolean  @default(false)
   maxAutomationRules        Int      @default(0)
-
+  products                  Int      @default(20)
   createdAt   DateTime @default(now())
 
   subscriptions ShopSubscription[]   // ← add this
