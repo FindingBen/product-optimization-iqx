@@ -4,6 +4,7 @@ import { updateBusinessRuleset,getBusinessRuleset } from "./BusinessRuleset.serv
 import {enqueueOptimization} from "./Automation.server"
 import {ProductAnalyzer} from "../Analyzer/product_analyzer";
 import {getAdminForShop} from "../shopify.auth"
+import { getOrCreateSubscription } from "./Subscription.server";
 
 /**
  * Scan shop products and generate SEO analyses
@@ -12,38 +13,57 @@ export async function scanProducts({ session, admin }) {
   const shop = session.shop;
   try {
     console.log("scanProducts called", { shop });
-    // 1️⃣ Fetch active products (first 50 for MVP)
-    const response = await admin.graphql( GET_ALL_PRODUCTS, {variables: { first: 50 } });
-    const json = await response.json();
 
-    if (json.errors) {
-    console.error("Shopify GraphQL errors:", JSON.stringify(json.errors, null, 2));
-    } 
-    // Defensive: log structure
-    if (!json.data) {
-      console.error("No data in Shopify response", json);
-      throw new Error("No data in Shopify response");
-    }
-    if (!json.data.products) {
-      console.error("No products in Shopify response", json.data);
-      throw new Error("No products in Shopify response");
-    }
-    if (!json.data.products.edges) {
-      console.error("No product edges in Shopify response", json.data.products);
-      throw new Error("No product edges in Shopify response");
+    const subscription = await getOrCreateSubscription(shop);
+    if (!subscription || subscription.status !== "active") {
+      throw new Error("Active subscription required to scan products");
     }
 
-    // Shopify returns products as edges
-    const products = json.data.products.edges.map(e => e.node);
+    const product_cap = subscription.plan.products || 100;
+    const PAGE_SIZE = 250; // Shopify max per page
+
+    const rules = await getBusinessRuleset(shop);
+    if (!rules) throw new Error("Cannot scan products without business ruleset");
+
+    let allProducts = [];
+    let hasNextPage = true;
+    let cursor = null;
+
+    // Paginate until we hit the plan cap or run out of products
+    while (hasNextPage && allProducts.length < product_cap) {
+      const remaining = product_cap - allProducts.length;
+      const fetchSize = Math.min(PAGE_SIZE, remaining);
+
+      const response = await admin.graphql(GET_ALL_PRODUCTS, {
+        variables: {
+          first: fetchSize,
+          after: cursor ?? null,
+        },
+      });
+
+      const json = await response.json();
+
+      if (json.errors) {
+        console.error("Shopify GraphQL errors:", JSON.stringify(json.errors, null, 2));
+        throw new Error("Shopify GraphQL error during scan");
+      }
+
+      const edges = json.data?.products?.edges ?? [];
+      const pageInfo = json.data?.products?.pageInfo;
+
+      allProducts = allProducts.concat(edges.map((e) => e.node));
+      hasNextPage = pageInfo?.hasNextPage ?? false;
+      cursor = pageInfo?.endCursor ?? null;
+
+      console.log(`[scan] Fetched ${edges.length} products | total so far: ${allProducts.length} | hasNextPage: ${hasNextPage}`);
+    }
+
+    console.log(`[scan] Total products to process: ${allProducts.length}`);
+
     let totalScore = 0;
     let totalCompletenessScore = 0;
-    const rules = await getBusinessRuleset(shop);
-    if (!rules) {
-      throw new Error("Cannot scan products without business ruleset");
-    }
-    // 2️⃣ Process each product
 
-    for (const p of products) {
+    for (const p of allProducts) {
       await prisma.$transaction(async (tx) => {
         const product = await tx.product.upsert({
           where: {
@@ -64,16 +84,19 @@ export async function scanProducts({ session, admin }) {
           },
         });
 
-
         const images =
-  p.media?.edges
-    ?.filter(edge => edge.node?.id && edge.node?.image)
-    ?.map(edge => ({
-      mediaId: edge.node.id,                // ✅ Correct MediaImage GID
-      url: edge.node.image.url,
-      altText: edge.node.image.altText,
-    })) || [];
+          p.media?.edges
+            ?.filter((edge) => edge.node?.id && edge.node?.image)
+            ?.map((edge) => ({
+              mediaId: edge.node.id,
+              url: edge.node.image.url,
+              altText: edge.node.image.altText,
+            })) || [];
+
         if (images.length > 0) {
+          // Delete old media before reinserting to avoid duplicates on rescan
+          await tx.productMedia.deleteMany({ where: { productId: product.id } });
+
           await tx.productMedia.createMany({
             data: images.map((img) => ({
               productId: product.id,
@@ -90,20 +113,18 @@ export async function scanProducts({ session, admin }) {
             title: p.title,
             description: p.descriptionHtml,
             parentImages: images,
-            variantImages: []
+            variantImages: [],
           },
           rules
         );
 
         const analysis = analyzer.analyze();
-
         totalScore += analysis.scores.seo;
         totalCompletenessScore += analysis.scores.completeness;
+
         await tx.seoAnalysis.create({
           data: {
-            product: {
-              connect: { id: product.id },
-            },
+            product: { connect: { id: product.id } },
             score: analysis.scores.seo,
             completeness: Math.min(analysis.scores.completeness, 100),
           },
@@ -111,24 +132,21 @@ export async function scanProducts({ session, admin }) {
       });
     }
 
-    await updateBusinessRuleset({ shop: session.shop, productScan: true });
+    await updateBusinessRuleset({ shop, productScan: true });
+
     return {
-      totalProducts: products.length,
+      totalProducts: allProducts.length,
       averageScore:
-        products.length > 0
-          ? Math.round(totalScore / products.length)
-          : 0,
+        allProducts.length > 0 ? Math.round(totalScore / allProducts.length) : 0,
       averageCompleteness:
-        products.length > 0
-          ? Math.round(Math.min(totalCompletenessScore / products.length, 100))
+        allProducts.length > 0
+          ? Math.round(Math.min(totalCompletenessScore / allProducts.length, 100))
           : 0,
     };
-    }
-   catch (err) {
-
-  console.error("Non-Response error:", err);
-  throw err;
-}
+  } catch (err) {
+    console.error("scanProducts error:", err);
+    throw err;
+  }
 }
 
 

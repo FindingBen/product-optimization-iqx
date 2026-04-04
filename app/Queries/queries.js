@@ -1,66 +1,53 @@
 export const GET_ALL_PRODUCTS = `
 query getProducts($first: Int, $after: String) {
-      products(first: $first, after: $after, query: "status:ACTIVE") {
-        edges {
-          node {
-            id
-            title
-            descriptionHtml
-            handle
-            createdAt
-            updatedAt
-            hasOutOfStockVariants
-            isGiftCard
-            publishedAt
-            tags
-            totalInventory
-            seo {
+  products(first: $first, after: $after, query: "status:ACTIVE") {
+    edges {
+      node {
+        id
+        title
+        descriptionHtml
+        handle
+        createdAt
+        updatedAt
+        tags
+        totalInventory
+        seo {
+          title
+          description
+        }
+        variants(first: 10) {
+          edges {
+            node {
+              id
               title
-              description
+              sku
+              price
+              inventoryQuantity
             }
-            variantsCount {
-              count
-              precision
-            }
-            variants(first: $first) {
-              edges {
-                node {
-                  id
-                  title
-                  sku
-                  price
-                  inventoryQuantity
-                  image {
-                    id       # ✔ This is also MediaImage ID now
-                    url
-                    altText
-                  }
-                }
-              }
-            }
-            media(first: 10) {
-              edges {
-                node {
-                  ... on MediaImage {
-                    id          # ✔ gid://shopify/MediaImage/xxx
-                    image {
-                      id
-                      url
-                      altText
-                    }
-                  }
+          }
+        }
+        media(first: 10) {
+          edges {
+            node {
+              ... on MediaImage {
+                id
+                image {
+                  url
+                  altText
                 }
               }
             }
           }
         }
-        pageInfo {
-          hasNextPage
-          endCursor
-        }
       }
     }
-      `
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
+`;
 
 export const GET_SHOPIFY_SHOP_INFO = `
 query {

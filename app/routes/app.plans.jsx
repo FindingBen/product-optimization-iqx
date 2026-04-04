@@ -13,7 +13,7 @@ export const loader = async ({ request }) => {
   const { session,admin } = await authenticate.admin(request);
   const shop = session.shop;
   const shopInfo = await getShopInfo(admin);
-  const isDevStore = shopInfo?.shop?.plan?.partnerDevelopment === false;
+  const isDevStore = shopInfo?.shop?.plan?.partnerDevelopment === true;
   const subscription = await prisma.shopSubscription.findUnique({
   where: { shop },
   include: { plan: true },
@@ -37,9 +37,9 @@ export const action = async ({ request }) => {
 
   const shopInfo = await getShopInfo(admin);
   const isDevStore = shopInfo?.plan?.partnerDevelopment === true;
-  // if (isDevStore) {
-  //   return { error: "Billing is disabled for development stores" };
-  // }
+  if (isDevStore) {
+    return { error: "Billing is disabled for development stores" };
+  }
   // Determine if this is an upgrade or downgrade
   const sub = await getOrCreateSubscription(session.shop);
   const currentPlan = await prisma.plan.findUnique({ where: { name: sub.planName } });
