@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import CreateAutomationModal from "../components/modals/automationCreateModal"
+import EditAutomationModal  from "../components/modals/automationsEditModal"
 import AutomationTable from "../components/automationTable"
 import { authenticate } from "../shopify.server";
 import { useFetcher, useNavigate, useLoaderData, redirect,useRevalidator } from "react-router";
@@ -67,6 +68,16 @@ export const action = async ({ request }) => {
 
     await updateAutomation(fields,automationId)
   }
+  else if (intent === "updateAutomation") {
+    const automationId = formData.get("automationId");
+    await updateAutomation({
+      optimizeTitle: formData.get("optimizeTitle") === "true",
+      optimizeDescription: formData.get("optimizeDescription") === "true",
+      optimizeAltText: formData.get("optimizeAltText") === "true",
+      optimizeSeo: formData.get("optimizeSeo") === "true",
+    }, automationId);
+    return { success: true };
+  }
 
   return null;
 };
@@ -74,7 +85,7 @@ export const action = async ({ request }) => {
 export default function AutomationPage() {
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
-  
+  const [editingAutomation, setEditingAutomation] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const { automationSettings, automations, stats } = useLoaderData(); // ← add stats
   const navigate = useNavigate();
@@ -86,7 +97,7 @@ export default function AutomationPage() {
   }, [fetcher.state, fetcher.data]);
 
 
-
+console.log('AA',editingAutomation)
   return (
     <s-page heading="Automations">
 
@@ -153,11 +164,22 @@ export default function AutomationPage() {
 
       {/* Table — automations now include runs array */}
       {automations.length > 0 && (
-        <AutomationTable automations={automations} />
+         <AutomationTable
+            automations={automations}
+            onEdit={(automation) => setEditingAutomation(automation)}  // ← pass handler
+          />
       )}
 
       {showModal && (
         <CreateAutomationModal close={() => setShowModal(false)} showModal={showModal} />
+      )}
+
+      {editingAutomation && (
+        <EditAutomationModal
+          automation={editingAutomation}
+          close={() => setEditingAutomation(null)}
+          showModal={!editingAutomation}
+        />
       )}
 
     </s-page>

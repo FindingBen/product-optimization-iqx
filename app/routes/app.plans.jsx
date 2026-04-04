@@ -73,7 +73,7 @@ const PLAN_FEATURES = {
     "500 optimizations / month",
     "Title, description & alt text",
     "SEO scoring",
-    "Up to 5 automation rules",
+    "Automation enabled",
     "New product auto-optimize",
     "250 products"
   ],
@@ -81,7 +81,7 @@ const PLAN_FEATURES = {
     "2500 optimizations",
     "Title, description & alt text",
     "SEO scoring",
-    "20",
+    "Automation enabled",
     "New product auto-optimize",
     "Priority queue",
    "500 products"

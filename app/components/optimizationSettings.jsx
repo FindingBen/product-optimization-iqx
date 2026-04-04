@@ -28,7 +28,7 @@ const OptimizationSettings = ({ businessRuleset }) => {
           Select which aspects of your products you want to optimize. You can
           choose to optimize the title, description, and alt text of your
           products. The app will use AI to generate optimized content based on
-          the rules you have set in the business ruleset.
+          the rules you have set in the business ruleset. <b>If automations are enabled then those rules overwrite these optimization settings.</b>
         </s-text>
       <s-choice-list
         multiple

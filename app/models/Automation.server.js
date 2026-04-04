@@ -43,14 +43,21 @@ export async function createAutomationRule(session, fields) {
   });
 }
 
-export async function updateAutomation(fields,automationId){
+export async function updateAutomation(fields, automationId) {
+  const data = {};
+
+  // Only include fields that were actually passed
+  if (fields.enable !== undefined) data.enable = fields.enable;
+  if (fields.optimizeTitle !== undefined) data.optimizeTitle = fields.optimizeTitle;
+  if (fields.optimizeDescription !== undefined) data.optimizeDescription = fields.optimizeDescription;
+  if (fields.optimizeAltText !== undefined) data.optimizeAltText = fields.optimizeAltText;
+  if (fields.optimizeSeo !== undefined) data.optimizeSeo = fields.optimizeSeo;
+  if (fields.name !== undefined) data.name = fields.name;
+
   return prisma.automationRule.update({
-    where:{
-    id:automationId
-  },data:{
-    enable:fields.enable
-  }
-  })
+    where: { id: automationId },
+    data,
+  });
 }
 
 export async function enqueueAutomationJob(session,productId){

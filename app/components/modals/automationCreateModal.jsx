@@ -68,11 +68,11 @@ function CreateAutomationModal({ showModal,close }) {
             onChange={() => toggle("alt")}
           />
 
-          <s-checkbox
+          {/* <s-checkbox
             label="Optimize SEO description"
             checked={fields.seo}
             onChange={() => toggle("seo")}
-          />
+          /> */}
         </s-stack>
       </s-box>
     </s-stack>
