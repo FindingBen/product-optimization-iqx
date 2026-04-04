@@ -1,6 +1,6 @@
 // app/routes/webhooks/compliance_registration.jsx
-import { createHmac } from "crypto";
-import prisma from "../db.server";
+import { createHmac, timingSafeEqual } from "crypto";
+import prisma from "../db.server"
 
 // Manual HMAC verification for compliance webhooks
 function verifyHmac(request, rawBody) {
@@ -20,13 +20,12 @@ function verifyHmac(request, rawBody) {
     .update(rawBody, "utf8")
     .digest("base64");
 
-  // Constant-time comparison to prevent timing attacks
   const hmacBuffer = Buffer.from(hmacHeader, "base64");
   const generatedBuffer = Buffer.from(generated, "base64");
 
   if (hmacBuffer.length !== generatedBuffer.length) return false;
 
-  return crypto.timingSafeEqual(hmacBuffer, generatedBuffer);
+  return timingSafeEqual(hmacBuffer, generatedBuffer); // ← use imported function directly
 }
 
 export const action = async ({ request }) => {
