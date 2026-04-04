@@ -62,14 +62,14 @@ export const action = async ({ request }) => {
 };
 
 const PLAN_FEATURES = {
-  Free: [
+  "free": [
     "20 optimizations / month",
     "Title, description & alt text",
     "SEO scoring",
     "Manual optimize only",
     "100 products"
   ],
-  "Iqx Starter": [
+  "iqx-starter": [
     "500 optimizations / month",
     "Title, description & alt text",
     "SEO scoring",
@@ -77,8 +77,8 @@ const PLAN_FEATURES = {
     "New product auto-optimize",
     "250 products"
   ],
-  "Iqx Pro": [
-    "2500 optimizations",
+  "iqx-pro": [
+    "1500 optimizations",
     "Title, description & alt text",
     "SEO scoring",
     "Automation enabled",
@@ -89,9 +89,9 @@ const PLAN_FEATURES = {
 };
 
 const PLAN_META = {
-  free:    { accent: "#6d7175", label: null,       icon: "○" },
-  "ProductIQX Starter": { accent: "#007a5e", label: "Popular",  icon: "◆" },
-  "ProductIQX Pro":     { accent: "#005e9e", label: "Best Value",icon: "★" },
+  "free":    { accent: "#6d7175", label: null,       icon: "○" },
+  "iqx-starter": { accent: "#007a5e", label: "Popular",  icon: "◆" },
+  "iqx-pro":     { accent: "#005e9e", label: "Best Value",icon: "★" },
 };
 
 function CheckIcon() {
@@ -107,7 +107,7 @@ function PlanCard({ plan, currentPlanName, onUpgrade, isLoading,isDevStore  }) {
   const features = PLAN_FEATURES[plan.name] ?? [];
   const meta = PLAN_META[plan.name] ?? PLAN_META.free;
   const isCurrent = plan.name === currentPlanName;
-  const isPro = plan.name === "ProductIQX Pro";
+  const isPro = plan.name === "iqx-pro";
 
   return (
     <div style={{
@@ -206,8 +206,8 @@ function PlanCard({ plan, currentPlanName, onUpgrade, isLoading,isDevStore  }) {
           lineHeight: 1.5,
         }}>
           {plan.name === "free" && "Get started at no cost."}
-          {plan.name === "starter" && "For growing stores optimizing at scale."}
-          {plan.name === "pro" && "Full power. No limits. Everything included."}
+          {plan.name === "iqx-starter" && "For growing stores optimizing at scale."}
+          {plan.name === "iqx-pro" && "Full power. No limits. Everything included."}
         </p>
       </div>
 
