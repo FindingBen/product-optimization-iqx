@@ -14,11 +14,11 @@ api_version = "2026-04"
 
   [[webhooks.subscriptions]]
   topics = [ "app/scopes_update" ]
-  uri = "/webhooks/app/scopes_update"
+  uri = "/webhooks/scopes_update"
 
   [[webhooks.subscriptions]]
   topics = [ "app/uninstalled" ]
-  uri = "/webhooks/app/uninstalled"
+  uri = "/webhooks/uninstalled"
 
   [[webhooks.subscriptions]]
   topics = [ "products/create" ]
@@ -35,6 +35,10 @@ api_version = "2026-04"
   [[webhooks.subscriptions]]
   topics = ["app_subscriptions/update"]
   uri = "/webhooks/subscriptions_update"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  uri = "/webhooks/compliance_registration"
 
 
 [access_scopes]
