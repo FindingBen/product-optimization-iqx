@@ -1,4 +1,4 @@
-import { useFetcher, useLoaderData, useRevalidator } from "react-router";
+import { useFetcher, useLoaderData, useRevalidator, redirect } from "react-router";
 import { useEffect, useState } from "react";
 import  {getAutomationSettings,createAutomationSettings} from "../models/Automation.server";
 import BusinessRulesetComponent from "../components/businessRulesetComponent";
@@ -13,6 +13,10 @@ export const loader = async ({ request }) => {
     "../models/BusinessRuleset.server"
   );
   const businessRuleset = await getBusinessRuleset(session.shop);
+  if (!businessRuleset) {
+    throw redirect("/app");
+  }
+
 
   const automationsettings = await getAutomationSettings(session)
 
@@ -69,9 +73,6 @@ export default function Settings(){
 } = useLoaderData();
 const revalidator = useRevalidator();
 
-const [automationEnabled, setAutomationEnabled] = useState(
-  automationsettings?.enabled ?? false
-);
 
 useEffect(() => {
   if (fetcher.state === "idle" && fetcher.data?.success) {
@@ -80,15 +81,6 @@ useEffect(() => {
 }, [fetcher.state, fetcher.data]);
 
 
-const handleAutomationToggle = (checked) => {
-  setAutomationEnabled(checked);
-
-  const formData = new FormData();
-  formData.append("intent", "createAutomationSettings");
-  formData.append("enabled", checked);
-
-  fetcher.submit(formData, { method: "post" });
-};
 
     return(
         <fetcher.Form method="post" data-save-bar>

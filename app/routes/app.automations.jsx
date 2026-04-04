@@ -6,10 +6,14 @@ import { authenticate } from "../shopify.server";
 import { useFetcher, useNavigate, useLoaderData, redirect,useRevalidator } from "react-router";
 import {getAutomationSettings, createAutomationRule,loadAutomations, updateAutomation} from "../models/Automation.server"
 import { getOrCreateSubscription  } from "../models/Subscription.server";
+import { getBusinessRuleset } from "../models/BusinessRuleset.server";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
-
+  const businessRuleset = await getBusinessRuleset(session.shop);
+  if (!businessRuleset) {
+    throw redirect("/app");
+  }
   const automationSettings = await getAutomationSettings(session);
   const automations = await loadAutomations(session);
   const subscription = await getOrCreateSubscription(session.shop);
