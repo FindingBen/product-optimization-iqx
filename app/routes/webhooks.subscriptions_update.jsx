@@ -34,9 +34,9 @@ export const action = async ({ request }) => {
     case "ACTIVE": {
       await activateSubscription(shop, shopifySubscriptionId);
 
-  console.log(`[webhook] Activated → ${sub.nextPlanName}`);
-  break;
-}
+      console.log(`[webhook] Activated → ${storedSub?.nextPlanName}`);
+      break;
+    }
 
     case "CANCELLED":{
       return new Response(null, { status: 200 });

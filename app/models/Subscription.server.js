@@ -144,8 +144,8 @@ export async function activateSubscription(shop, shopifySubscriptionId) {
   await prisma.shopSubscription.update({
     where: { shop },
     data: {
-      planName: sub.nextPlanName,   // ✅ move it here
-      nextPlanName: nextPlan,
+      planName: nextPlan,
+      nextPlanName: null,
       status: "active",
       shopifySubscriptionId,
       optimizationsUsedThisCycle: 0,

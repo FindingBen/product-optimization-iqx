@@ -13,7 +13,7 @@ export const loader = async ({ request }) => {
   const { session,admin } = await authenticate.admin(request);
   const shop = session.shop;
   const shopInfo = await getShopInfo(admin);
-  const isDevStore = shopInfo?.shop?.plan?.partnerDevelopment === true;
+  const isDevStore = false
   const subscription = await prisma.shopSubscription.findUnique({
   where: { shop },
   include: { plan: true },
