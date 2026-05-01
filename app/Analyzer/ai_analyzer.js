@@ -2,6 +2,8 @@ import JSON5 from "json5";
 import { RetrySafeOpenAI } from "./retry_component.js"
 import {BUSINESS_RULESET_PROMPT,PRODUCT_TITLE_PROMPT,PRODUCT_DESC_PROMPT,META_DESC_PROMPT,ALT_TEXT_PROMPT} from "../Prompts/prompts.js";
 
+const GPT_MODEL = process.env.GPT_MODEL || "gpt-4o-mini";
+
 
 class Prompting{
     constructor({client,data}){
@@ -12,7 +14,7 @@ class Prompting{
     async analyze_business(){
         const prompt = BUSINESS_RULESET_PROMPT(JSON.stringify(this.data, null, 2));
         const response = await this.client.chat.completions.create({
-            model: process.env.GPT_MODEL,
+            model: GPT_MODEL,
             temperature: 0.2,
             messages: [
                 { role: "system", content: "You are an ecommerce business classifier." },
@@ -71,7 +73,7 @@ class ProductEnhancement {
   async enhance_title() {
     const prompt = PRODUCT_TITLE_PROMPT(this.product.title, this.rules, this.product.id);
     const response = await this.ai.chatCompletion({
-      model: process.env.GPT_MODEL,
+      model: GPT_MODEL,
       messages: [{ role: "user", content: prompt }],
     });
     const content = response?.choices?.[0]?.message?.content ?? "";
@@ -82,7 +84,7 @@ class ProductEnhancement {
   async enhance_description() {
     const prompt = PRODUCT_DESC_PROMPT(this.product.title, this.rules, this.product.id);
     const response = await this.ai.chatCompletion({
-      model: process.env.GPT_MODEL,
+      model: GPT_MODEL,
       messages: [{ role: "user", content: prompt }],
     });
     const content = response?.choices?.[0]?.message?.content ?? "";
@@ -98,7 +100,7 @@ class ProductEnhancement {
     const image_info = normalizeImages(this.images);
     const prompt = ALT_TEXT_PROMPT(this.product.title, this.rules, image_info);
     const response = await this.ai.chatCompletion({
-      model: process.env.GPT_MODEL,
+      model: GPT_MODEL,
       messages: [{ role: "user", content: prompt }],
     });
     const content = response?.choices?.[0]?.message?.content ?? "";
@@ -109,7 +111,7 @@ class ProductEnhancement {
   async enhance_meta_description() {
     const prompt = META_DESC_PROMPT(this.product.title, this.rules, this.product.id);
     const response = await this.ai.chatCompletion({
-      model: process.env.GPT_MODEL,
+      model: GPT_MODEL,
       messages: [{ role: "user", content: prompt }],
     });
     const content = response?.choices?.[0]?.message?.content ?? "";
@@ -195,7 +197,7 @@ export async function classifyImages({ client, images }) {
     }
 
     const response = await client.chat.completions.create({
-        model: process.env.GPT_MODEL,
+        model: GPT_MODEL,
         temperature: 0.2,
         messages: [
             { role: "system", content: "You are an expert product image classifier." },
