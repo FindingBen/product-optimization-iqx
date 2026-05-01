@@ -325,7 +325,6 @@ export default function PlansPage() {
   const handleUpgrade = (planName) => {
     fetcher.submit({ planName }, { method: "post" });
   };
-  console.log('AAAAAAA',isDevStore)
   // Redirect to Shopify confirmation URL if returned
   if (fetcher.data?.confirmationUrl) {
     window.top.location.href = fetcher.data.confirmationUrl;
@@ -446,11 +445,11 @@ export default function PlansPage() {
       <s-section>
          <s-card>
           <s-stack direction="block" gap="base">
-  <div style={{display:"flex" , flexDirection:"row"}}>
+  <div style={{display:"flex", flexDirection:"column", gap: 6}}>
     <s-heading>Next plan billing</s-heading>
-  <div>
-            
-      </div>
+    <s-text tone="subdued">
+      If you downgrade, your new plan takes effect at the end of your current billing cycle. If you upgrade, the new plan takes effect immediately and you are charged a prorated amount for the remainder of the billing cycle.
+    </s-text>
   </div>
 
   <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
