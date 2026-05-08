@@ -2,7 +2,29 @@ import JSON5 from "json5";
 import { RetrySafeOpenAI } from "./retry_component.js"
 import {BUSINESS_RULESET_PROMPT,PRODUCT_TITLE_PROMPT,PRODUCT_DESC_PROMPT,META_DESC_PROMPT,ALT_TEXT_PROMPT} from "../Prompts/prompts.js";
 
-const GPT_MODEL = process.env.GPT_MODEL || "gpt-4o-mini";
+const DEFAULT_GPT_MODEL = "gpt-4o-mini";
+
+function normalizeOpenAIModelName(value) {
+  if (typeof value !== "string") {
+    return DEFAULT_GPT_MODEL;
+  }
+
+  const trimmed = value.trim();
+  const normalized = trimmed.replace(/^[\\'"]+/, "").replace(/[\\'"]+$/, "");
+
+  if (!normalized || normalized.includes("${{")) {
+    console.warn(`[OpenAI] Invalid GPT_MODEL value "${value}". Falling back to ${DEFAULT_GPT_MODEL}.`);
+    return DEFAULT_GPT_MODEL;
+  }
+
+  if (normalized !== trimmed) {
+    console.warn(`[OpenAI] Normalized GPT_MODEL from "${value}" to "${normalized}".`);
+  }
+
+  return normalized;
+}
+
+const GPT_MODEL = normalizeOpenAIModelName(process.env.GPT_MODEL);
 
 
 class Prompting{
