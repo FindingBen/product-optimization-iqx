@@ -17,9 +17,9 @@ export const loader = async ({ request }) => {
   const automationSettings = await getAutomationSettings(session);
   const automations = await loadAutomations(session);
   const subscription = await getOrCreateSubscription(session.shop);
-  // if (!subscription || subscription.planName === "Free") {
-  //   throw redirect("/app/plans");
-  // }
+  if (!subscription || subscription.planName === "Free") {
+    throw redirect("/app/plans");
+  }
  const allRuns = automations.flatMap((a) => a.runs);
 const totalRuns = allRuns.length;
 const completedRuns = allRuns.filter((r) => r.status === "completed").length;

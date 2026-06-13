@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "4fe4d804d14da56509be3eaefc2ac723"
-name = "product-optimization-iqx"
+name = "product-pilot-ai"
 application_url = "https://product-optimization-iqx-production.up.railway.app"
 embedded = true
 
