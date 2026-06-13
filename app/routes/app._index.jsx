@@ -538,7 +538,7 @@ return (
       <s-stack direction="inline" alignItems="center" justifyContent="space-between">
         <s-text tone="critical">Business rules configured</s-text>
 
-        <fetcher.Form method="post">
+        {/* <fetcher.Form method="post">
         <input type="hidden" name="intent" value="deleteProducts" />
         <s-button
           tone="critical"
@@ -548,7 +548,7 @@ return (
         >
           Delete products
         </s-button>
-      </fetcher.Form>
+      </fetcher.Form> */}
 
       </s-stack>
     </s-box>

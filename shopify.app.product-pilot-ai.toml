@@ -1,0 +1,46 @@
+client_id = "52c1b1e9d6414f2949c21a2a63dc2575"
+name = "product-pilot-ai"
+application_url = "https://product-optimization-iqx-production.up.railway.app"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+
+[webhooks]
+api_version = "2026-04"
+
+[[webhooks.subscriptions]]
+topics = [ "app/scopes_update" ]
+uri = "/webhooks/scopes_update"
+
+[[webhooks.subscriptions]]
+topics = [ "app/uninstalled" ]
+uri = "/webhooks/uninstalled"
+
+[[webhooks.subscriptions]]
+topics = [ "products/create" ]
+uri = "/webhooks/products_create"
+
+[[webhooks.subscriptions]]
+topics = [ "products/delete" ]
+uri = "/webhooks/products_delete"
+
+[[webhooks.subscriptions]]
+topics = [ "products/update" ]
+uri = "/webhooks/products_update"
+
+[[webhooks.subscriptions]]
+topics = ["app_subscriptions/update"]
+uri = "/webhooks/subscriptions_update"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+uri = "/webhooks/compliance_registration"
+
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "write_products,write_files"
+
+[auth]
+redirect_urls = [ "https://product-optimization-iqx-production.up.railway.app/auth/callback" ]
