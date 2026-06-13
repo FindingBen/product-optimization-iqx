@@ -174,6 +174,7 @@ else if (intent === "handleApprove"){
 
 export default function Index() {
   const fetcher = useFetcher();
+  const scanFetcher = useFetcher();
   const reviewFetcher = useFetcher();
   const actionFetcher = useFetcher();
   // const shopify = useAppBridge();
@@ -208,10 +209,10 @@ export default function Index() {
   const revalidator = useRevalidator();
 
 useEffect(() => {
-  if (fetcher.state === "idle" && fetcher.data?.success) {
+  if (scanFetcher.state === "idle" && scanFetcher.data?.success) {
     revalidator.revalidate();
   }
-}, [fetcher.state, fetcher.data]);
+}, [scanFetcher.state, scanFetcher.data, revalidator]);
 
 
 useEffect(() => {
@@ -256,10 +257,18 @@ productId: selectedProductId},
 }
 
 useEffect(() => {
-  if (fetcher.state === "idle" && fetcher.data?.totalProducts) {
+  if (scanFetcher.state === "idle" && scanFetcher.data?.success) {
     setIsScanModalOpen(false);
+    setRulesModalOpen(false);
   }
-}, [fetcher.state, fetcher.data]);
+}, [scanFetcher.state, scanFetcher.data]);
+
+useEffect(() => {
+  if (businessRuleset?.productScan === true) {
+    setIsScanModalOpen(false);
+    setRulesModalOpen(false);
+  }
+}, [businessRuleset?.productScan]);
 
 
 
@@ -390,9 +399,9 @@ return (
 
             <s-button
               variant="primary"
-              loading={fetcher.state === "submitting"}
+              loading={scanFetcher.state === "submitting"}
               onClick={() =>
-                fetcher.submit(
+                scanFetcher.submit(
                   { intent: "scanProducts" },
                   { method: "post" }
                 )
@@ -739,12 +748,12 @@ return (
               loading={fetcher.state === "submitting"}
               onClick={() =>
                 fetcher.submit(
-                  { intent: "scanProducts" },
+                  { intent: "rulesetConfigure" },
                   { method: "post" }
                 )
               }
             >
-              Yes, scan products
+              Continue
             </s-button>
           </s-stack>
         </s-stack>

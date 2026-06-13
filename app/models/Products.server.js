@@ -135,6 +135,7 @@ export async function scanProducts({ session, admin }) {
     await updateBusinessRuleset({ shop, productScan: true });
 
     return {
+      success: true,
       totalProducts: allProducts.length,
       averageScore:
         allProducts.length > 0 ? Math.round(totalScore / allProducts.length) : 0,
