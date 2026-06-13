@@ -13,10 +13,10 @@ export const loader = async ({ request }) => {
     }
   const runs = await loadAutomationRuns(session);
   const subscription = await getOrCreateSubscription(session.shop);
-  if (!subscription || subscription.planName === "Free") {
+  // if (!subscription || subscription.planName === "Free") {
 
-    throw redirect("/app/plans");
-  }
+  //   throw redirect("/app/plans");
+  // }
   return { runs,subscription };
 };
 
