@@ -164,6 +164,11 @@ const ProductReviewDrawer = ({
 
   const loadingState = loading || !product || !context;
 
+  const hasChangedValue = (original, enhanced) => {
+    if (!enhanced) return false;
+    return String(original ?? "").trim() !== String(enhanced ?? "").trim();
+  };
+
   
   const contextImages = context?.media ?? [];
   const productImages = product?.media ?? [];
@@ -205,22 +210,26 @@ const ProductReviewDrawer = ({
           <div style={{ display: "flex", flexDirection: "column" }}>
 
             {/* Title */}
-            <CompareBlock
-              label="Product Title"
-              original={product?.title}
-              enhanced={context?.title}
-            />
+            {hasChangedValue(product?.title, context?.title) && (
+              <CompareBlock
+                label="Product Title"
+                original={product?.title}
+                enhanced={context?.title}
+              />
+            )}
 
             {/* Description */}
-            <CompareBlock
-              label="Description"
-              original={product?.description}
-              enhanced={context?.description}
-              isHtml
-            />
+            {hasChangedValue(product?.description, context?.description) && (
+              <CompareBlock
+                label="Description"
+                original={product?.description}
+                enhanced={context?.description}
+                isHtml
+              />
+            )}
 
             {/* SEO Description */}
-            {(product?.seoDescription || context?.seoDescription) && (
+            {hasChangedValue(product?.seoDescription, context?.seoDescription) && (
               <CompareBlock
                 label="SEO Meta Description"
                 original={product?.seoDescription}
@@ -298,29 +307,31 @@ const ProductReviewDrawer = ({
                 </div>
 
                 {/* Alt text comparison */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderTop: "1px solid #e1e3e5" }}>
-                  <div style={{
-                    padding: "14px 16px",
-                    borderRight: "1px solid #e1e3e5",
-                    background: "rgba(215,44,13,0.03)",
-                  }}>
-                    <SectionLabel>Original Alt Text</SectionLabel>
-                    <p style={{ fontSize: 13, color: "#3d4246", lineHeight: 1.6, margin: 0 }}>
-                      {currentOriginalImage?.altText || <span style={{ color: "#8c9196" }}>No alt text</span>}
-                    </p>
-                    <Badge tone="info">Original</Badge>
+                {hasChangedValue(currentOriginalImage?.altText, currentContextImage?.altText) && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderTop: "1px solid #e1e3e5" }}>
+                    <div style={{
+                      padding: "14px 16px",
+                      borderRight: "1px solid #e1e3e5",
+                      background: "rgba(215,44,13,0.03)",
+                    }}>
+                      <SectionLabel>Original Alt Text</SectionLabel>
+                      <p style={{ fontSize: 13, color: "#3d4246", lineHeight: 1.6, margin: 0 }}>
+                        {currentOriginalImage?.altText || <span style={{ color: "#8c9196" }}>No alt text</span>}
+                      </p>
+                      <Badge tone="info">Original</Badge>
+                    </div>
+                    <div style={{
+                      padding: "14px 16px",
+                      background: "rgba(0,122,94,0.03)",
+                    }}>
+                      <SectionLabel>Enhanced Alt Text</SectionLabel>
+                      <p style={{ fontSize: 13, color: "#007a5e", lineHeight: 1.6, margin: 0, fontWeight: 500 }}>
+                        {currentContextImage?.altText || <span style={{ color: "#8c9196" }}>No alt text</span>}
+                      </p>
+                      <Badge tone="success">Enhanced</Badge>
+                    </div>
                   </div>
-                  <div style={{
-                    padding: "14px 16px",
-                    background: "rgba(0,122,94,0.03)",
-                  }}>
-                    <SectionLabel>Enhanced Alt Text</SectionLabel>
-                    <p style={{ fontSize: 13, color: "#007a5e", lineHeight: 1.6, margin: 0, fontWeight: 500 }}>
-                      {currentContextImage?.altText || <span style={{ color: "#8c9196" }}>No alt text</span>}
-                    </p>
-                    <Badge tone="success">Enhanced</Badge>
-                  </div>
-                </div>
+                )}
               </div>
             )}
 

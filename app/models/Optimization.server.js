@@ -18,150 +18,132 @@ export async function handleOptimization({
     where: { shop },
   });
 
+  if (!product) {
+    throw new Error("Product not found");
+  }
 
+  if (!rules) {
+    throw new Error(`Business ruleset not found for shop ${shop}`);
+  }
 
-const optimizationConfig = {
-  title: automationRule?.optimizeTitle ?? rules.titleOptimize,
-  description: automationRule?.optimizeDescription ?? rules.descriptionOptimize,
-  alt: automationRule?.optimizeAltText ?? rules.altTextOptimize,
-  seo: automationRule?.optimizeSeo ?? false
-};
+  const optimizationConfig = {
+    title: automationRule?.optimizeTitle ?? rules.titleOptimize ?? false,
+    description: automationRule?.optimizeDescription ?? rules.descriptionOptimize ?? false,
+    alt: automationRule?.optimizeAltText ?? rules.altTextOptimize ?? false,
+    seo: automationRule?.optimizeSeo ?? false,
+  };
 
   const images = await prisma.productMedia.findMany({
     where: { productId },
   });
 
-  if (!product) {
-    throw new Error("Product not found");
-  }
-
-
   const auth = new OpenAuthInit(admin || {});
   const client = await auth.clientAuth();
 
- const enhancement = new ProductEnhancement(
-  client,
-  rules,
-  product,
-  images
-);
+  const enhancement = new ProductEnhancement(client, rules, product, images);
 
-let enhanced_title = null;
-let enhanced_description = null;
-let enhanced_alt = null;
+  let enhanced_title = null;
+  let enhanced_description = null;
+  let enhanced_alt = null;
 
-if (optimizationConfig.title) {
-  enhanced_title = await enhancement.enhance_title();
-}
+  if (optimizationConfig.title) {
+    enhanced_title = await enhancement.enhance_title();
+  }
 
-if (optimizationConfig.description) {
-  enhanced_description = await enhancement.enhance_description();
-}
+  if (optimizationConfig.description) {
+    enhanced_description = await enhancement.enhance_description();
+  }
 
-if (optimizationConfig.alt) {
-  enhanced_alt = await enhancement.enhance_alt_text();
-}
+  if (optimizationConfig.alt) {
+    enhanced_alt = await enhancement.enhance_alt_text();
+  }
 
-const updateData = {};
+  const updateData = {};
 
-if (enhanced_title) {
-  updateData.title = enhanced_title.title;
-}
+  if (enhanced_title) {
+    updateData.title = enhanced_title.title;
+  }
 
-if (enhanced_description) {
-  updateData.description = enhanced_description.description;
-}
+  if (enhanced_description) {
+    updateData.description = enhanced_description.description;
+  }
 
-if (enhanced_description?.metaDescription) {
-  updateData.seoDescription = enhanced_description.metaDescription;
-}
+  if (enhanced_description?.metaDescription) {
+    updateData.seoDescription = enhanced_description.metaDescription;
+  }
 
-await prisma.$transaction(async (tx) => {
-  const productContext = await tx.productContext.upsert({
-    where: {
-      shop_shopifyProductId: {
+  await prisma.$transaction(async (tx) => {
+    const productContext = await tx.productContext.upsert({
+      where: {
+        shop_shopifyProductId: {
+          shop,
+          shopifyProductId: product.shopifyProductId,
+        },
+      },
+      update: updateData,
+      create: {
         shop,
         shopifyProductId: product.shopifyProductId,
+        title: updateData.title ?? product.title ?? "",
+        description: updateData.description ?? product.description,
+        seoDescription: updateData.seoDescription ?? product.seoDescription,
       },
-    },
-    update: updateData,
-    create: {
-      shop,
-      shopifyProductId: product.shopifyProductId,
-      ...updateData,
-    },
+    });
+
+    if (enhanced_alt && enhanced_alt.length > 0) {
+      await tx.productMediaContext.createMany({
+        data: enhanced_alt.map((img) => {
+          const original = images.find((i) => i.shopifyMediaId === img.id);
+
+          return {
+            productId: productContext.id,
+            shopifyMediaId: img.id,
+            url: original?.url ?? null,
+            altText: img.alt,
+          };
+        }),
+      });
+    }
   });
-console.log('ENHANCED ALT', images);
-  // Only create alt text if it exists
-if (enhanced_alt && enhanced_alt.length > 0) {
-  await tx.productMediaContext.createMany({
-    data: enhanced_alt.map((img) => {
-      // Match by shopifyMediaId, not prisma id
-      const original = images.find(
-        (i) => i.shopifyMediaId === img.id  // ← was i.id === img.id
-      );
 
-      console.log(`[alt] img.id:${img.id} → found original:`, original?.url ?? "NOT FOUND");
-
-      return {
-        productId: productContext.id,
-        shopifyMediaId: img.id,
-        url: original?.url ?? null,  // ← null instead of placeholder so you know it's missing
-        altText: img.alt,
-      };
-    }),
-  });
-}
-
-  
-
-  // await tx.product.update({
-  //   where: { id: productId },
-  //   data: { optimized: true },
-  // });
-});
-
-  
   const results = [];
 
-if (enhanced_title) {
-  results.push({
-    type: "TITLE",
-    originalValue: product.title ?? null,
-    optimizedValue: enhanced_title.title,
-  });
-}
-
-if (enhanced_description) {
-  results.push({
-    type: "DESCRIPTION",
-    originalValue: product.description ?? null,
-    optimizedValue: enhanced_description.description,
-  });
-
-  if (enhanced_description.metaDescription) {
+  if (enhanced_title) {
     results.push({
-      type: "SEO_DESCRIPTION",
-      originalValue: product.seoDescription ?? null,
-      optimizedValue: enhanced_description.metaDescription,
+      type: "TITLE",
+      originalValue: product.title ?? null,
+      optimizedValue: enhanced_title.title,
     });
   }
-}
 
-if (enhanced_alt?.length > 0) {
-  enhanced_alt.forEach((img) => {
-    const original = images.find(
-      (i) => i.shopifyMediaId === img.id  // ← same fix here
-    );
+  if (enhanced_description) {
     results.push({
-      type: "ALT_TEXT",
-      originalValue: original?.altText ?? null,
-      optimizedValue: img.alt,
+      type: "DESCRIPTION",
+      originalValue: product.description ?? null,
+      optimizedValue: enhanced_description.description,
     });
-  });
-}
 
-return results
+    if (enhanced_description.metaDescription) {
+      results.push({
+        type: "SEO_DESCRIPTION",
+        originalValue: product.seoDescription ?? null,
+        optimizedValue: enhanced_description.metaDescription,
+      });
+    }
+  }
+
+  if (enhanced_alt?.length > 0) {
+    enhanced_alt.forEach((img) => {
+      const original = images.find((i) => i.shopifyMediaId === img.id);
+      results.push({
+        type: "ALT_TEXT",
+        originalValue: original?.altText ?? null,
+        optimizedValue: img.alt,
+      });
+    });
+  }
+
+  return results;
 
 }
 
